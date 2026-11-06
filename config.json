@@ -1,0 +1,188 @@
+{
+  "market": {
+    "source": "EIA",
+    "ba": "DUK",
+    "price_series": "DA"
+  },
+  "gas": {
+    "hub": "HenryHub",
+    "basis_adder_per_mmbtu": 0.25
+  },
+  "generators": [
+    {
+      "name": "gen_1",
+      "heat_rate_btu_per_kwh": 9000.0,
+      "capacity_mw": 2.0,
+      "min_margin_threshold": 5.0,
+      "revenue_per_mwh": 65.0,
+      "revenue_source": "timeseries",
+      "vom_per_mwh": 0.0,
+      "start_cost": 0.0,
+      "min_up_hours": 0,
+      "min_down_hours": 0,
+      "availability_cap": 1.0,
+      "maintenance_windows": [],
+      "ramp_to_full_minutes": 10,
+      "ramp_rate_mw_per_hr": 12.0
+    },
+    {
+      "name": "gen_2",
+      "heat_rate_btu_per_kwh": 10500.0,
+      "capacity_mw": 0.005,
+      "min_margin_threshold": 10.0,
+      "revenue_per_mwh": 90.0,
+      "revenue_source": "timeseries",
+      "vom_per_mwh": 0.0,
+      "start_cost": 0.0,
+      "min_up_hours": 0,
+      "min_down_hours": 0,
+      "availability_cap": 1.0,
+      "maintenance_windows": [],
+      "ramp_to_full_minutes": 2,
+      "ramp_rate_mw_per_hr": 0.15
+    }
+  ],
+  "operations": {
+    "export_mode": "limited_export",
+    "export_cap_mw": 1.5,
+    "permit_class": "non_emergency",
+    "fuel_contract": "interruptible",
+    "program_mode": "PURPA",
+    "avoided_cost_fixed_per_mwh": 65.0,
+    "dr_event_revenue_per_mwh": 150.0,
+    "fuel_curtailment_windows": [],
+    "dr_event_windows": [],
+    "ppa_windows": []
+  },
+  "operation_presets": {
+    "Ideal (Firm Gas \u2022 24\u00d77 PPA \u2022 No DR)": {
+      "operations": {
+        "export_mode": "full_export",
+        "export_cap_mw": 9999,
+        "permit_class": "non_emergency",
+        "fuel_contract": "firm",
+        "program_mode": "PURPA",
+        "avoided_cost_fixed_per_mwh": 65.0,
+        "dr_event_revenue_per_mwh": null,
+        "fuel_curtailment_windows": [],
+        "dr_event_windows": [],
+        "ppa_windows": [
+          {
+            "start": "2025-01-01 00:00",
+            "end": "2025-12-31 23:59",
+            "note": "Contract year (24\u00d77)"
+          }
+        ]
+      }
+    },
+    "NC Realistic (Interruptible \u2022 Summer DR \u2022 24\u00d77 PURPA)": {
+      "operations": {
+        "export_mode": "limited_export",
+        "export_cap_mw": 2.0,
+        "permit_class": "non_emergency",
+        "fuel_contract": "interruptible",
+        "program_mode": "PURPA",
+        "avoided_cost_fixed_per_mwh": 65.0,
+        "dr_event_revenue_per_mwh": 150.0,
+        "fuel_curtailment_windows": [
+          {
+            "start": "2025-01-18 05:00:00",
+            "end": "2025-01-19 17:00:00",
+            "note": "Interruptible gas curtailment (preset)"
+          },
+          {
+            "start": "2025-02-08 06:00:00",
+            "end": "2025-02-08 16:00:00",
+            "note": "Interruptible gas curtailment (preset)"
+          }
+        ],
+        "dr_event_windows": [
+          {
+            "start": "2025-07-15 14:00:00",
+            "end": "2025-07-15 18:00:00",
+            "note": "Summer DR (preset)"
+          },
+          {
+            "start": "2025-07-21 14:00:00",
+            "end": "2025-07-21 18:00:00",
+            "note": "Summer DR (preset)"
+          },
+          {
+            "start": "2025-08-12 14:00:00",
+            "end": "2025-08-12 18:00:00",
+            "note": "Summer DR (preset)"
+          },
+          {
+            "start": "2025-08-14 14:00:00",
+            "end": "2025-08-14 18:00:00",
+            "note": "Summer DR (preset)"
+          },
+          {
+            "start": "2025-08-20 14:00:00",
+            "end": "2025-08-20 18:00:00",
+            "note": "Summer DR (preset)"
+          }
+        ],
+        "ppa_windows": [
+          {
+            "start": "2025-01-01 00:00",
+            "end": "2025-12-31 23:59",
+            "note": "Contract year (24\u00d77)"
+          }
+        ]
+      }
+    },
+    "NC Stress Case (More Curtailments \u2022 Fewer DR)": {
+      "operations": {
+        "export_mode": "limited_export",
+        "export_cap_mw": 1.0,
+        "permit_class": "non_emergency",
+        "fuel_contract": "interruptible",
+        "program_mode": "PURPA",
+        "avoided_cost_fixed_per_mwh": 60.0,
+        "dr_event_revenue_per_mwh": 120.0,
+        "fuel_curtailment_windows": [
+          {
+            "start": "2025-01-18 05:00:00",
+            "end": "2025-01-19 17:00:00",
+            "note": "Interruptible gas curtailment (preset)"
+          },
+          {
+            "start": "2025-02-08 06:00:00",
+            "end": "2025-02-08 16:00:00",
+            "note": "Interruptible gas curtailment (preset)"
+          },
+          {
+            "start": "2025-12-09 06:00",
+            "end": "2025-12-09 22:00",
+            "note": "Early winter constraint (preset)"
+          }
+        ],
+        "dr_event_windows": [
+          {
+            "start": "2025-07-15 14:00:00",
+            "end": "2025-07-15 18:00:00",
+            "note": "Summer DR (preset)"
+          },
+          {
+            "start": "2025-08-14 14:00:00",
+            "end": "2025-08-14 18:00:00",
+            "note": "Summer DR (preset)"
+          },
+          {
+            "start": "2025-08-20 14:00:00",
+            "end": "2025-08-20 18:00:00",
+            "note": "Summer DR (preset)"
+          }
+        ],
+        "ppa_windows": [
+          {
+            "start": "2025-01-01 00:00",
+            "end": "2025-12-31 23:59",
+            "note": "Contract year (24\u00d77)"
+          }
+        ]
+      }
+    }
+  }
+}
