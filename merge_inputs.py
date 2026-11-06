@@ -26,7 +26,7 @@ def _min_step_seconds(ts):
     return float(diffs.min()) if not diffs.empty else float("inf")
 
 def _target_freq(steps):
-    return "15min" if any(s < 3600 for s in steps if s != float("inf")) else "H"
+    return "15min" if any(s < 3600 for s in steps if s != float("inf")) else "h"
 
 def _flag_windows(index_ts, windows):
     if not windows:
@@ -102,7 +102,7 @@ def merge_inputs(
     for df in (demand, weather, prices):
         if df is not None and not df.empty:
             steps.append(_min_step_seconds(df["timestamp"]))
-    freq = _target_freq(steps) if steps else "H"
+    freq = _target_freq(steps) if steps else "h"
 
     # Window
     ts_min, ts_max = window_start, window_end

@@ -11,11 +11,22 @@ Running log of assumptions, judgment calls and unverified facts. Each entry: wha
   the library-style `merge_inputs`/`simulate_simple_margin` refactor (source of defects 3, 5, 6, 7).
 - Step 1 defects 3, 5, 6, 7 exist only in `Historical_gensim`; defect 9a (`"\\n"` in
   `serialize_windows`) was not found in either variant. Original's dispatch ignores maintenance windows.
+- **New defect #10 (found by characterization):** `merge_inputs._flag_windows` returns a
+  timestamp-indexed Series that is assigned into a RangeIndex frame, so `fuel_available`,
+  `event_active` and `ppa_active` are NaN whenever any window is configured. Effect: PURPA/DR modes
+  never dispatch once a PPA/DR window exists; fuel curtailments are silently ignored.
+- Original's daily gas forward-fill stops at the last daily print, so hours after it are NaN in
+  `merged_inputs` (the simulator later ffills them). Treated as part of defect #5.
+- Characterization goldens come from the unmodified Original code under pandas 2.3.3. A
+  mechanical pandas-3 shim (`fillna(method=)`→`ffill/bfill`, `"H"`→`"h"`,
+  `is_datetime64tz_dtype`→`isinstance(..., DatetimeTZDtype)`) reproduces them exactly under
+  pandas 3.1.1. See `tests/golden/README.md`.
 
 ## Secrets
 
 - The same EIA key appeared in 6 legacy files (`get_demand.py`, `get_gas_prices.py`, `config.json`
-  in both variants). None were copied; keys load from `.env` only. **Status: rotation pending (Adam).**
+  in both variants). None were copied into the repo; keys load from `.env` only.
+  Key rotation deferred by owner; key confined to .env and the legacy folder.
 - The GitHub remote's only prior commit (`c939325`, README) was scanned: no secrets.
 
 ## Market / contract status — Fries (EIA 10798, FERC P-2883)

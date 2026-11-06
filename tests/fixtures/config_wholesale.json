@@ -1,0 +1,50 @@
+{
+  "market": {"source": "EIA", "ba": "PJM", "price_series": "DA"},
+  "gas": {"hub": "HenryHub", "basis_adder_per_mmbtu": 0.25},
+  "generators": [
+    {
+      "name": "gen_1",
+      "heat_rate_btu_per_kwh": 9000.0,
+      "capacity_mw": 2.0,
+      "min_margin_threshold": 5.0,
+      "revenue_per_mwh": 65.0,
+      "revenue_source": "timeseries",
+      "vom_per_mwh": 3.0,
+      "start_cost": 50.0,
+      "min_up_hours": 2,
+      "min_down_hours": 2,
+      "availability_cap": 1.0,
+      "maintenance_windows": [{"start": "2025-03-10 08:00", "end": "2025-03-10 16:00", "reason": "fixture outage"}],
+      "ramp_to_full_minutes": 10,
+      "ramp_rate_mw_per_hr": 12.0
+    },
+    {
+      "name": "gen_2",
+      "heat_rate_btu_per_kwh": 10500.0,
+      "capacity_mw": 0.5,
+      "min_margin_threshold": 10.0,
+      "revenue_per_mwh": 90.0,
+      "revenue_source": "timeseries",
+      "vom_per_mwh": 0.0,
+      "start_cost": 0.0,
+      "min_up_hours": 0,
+      "min_down_hours": 0,
+      "availability_cap": 0.9,
+      "maintenance_windows": [],
+      "ramp_to_full_minutes": 0,
+      "ramp_rate_mw_per_hr": 0.2
+    }
+  ],
+  "operations": {
+    "export_mode": "full_export",
+    "export_cap_mw": 9999,
+    "permit_class": "non_emergency",
+    "fuel_contract": "firm",
+    "program_mode": "WHOLESALE",
+    "avoided_cost_fixed_per_mwh": 65.0,
+    "dr_event_revenue_per_mwh": null,
+    "fuel_curtailment_windows": [],
+    "dr_event_windows": [],
+    "ppa_windows": []
+  }
+}

@@ -71,8 +71,8 @@ def main():
         eff_cap = max(0.0, min(capacity*avail, capacity))
 
         gas_col = "gas_price_effective" if "gas_price_effective" in df.columns else "gas_price"
-        fuel_cost = heat_rate * pd.to_numeric(df[gas_col], errors="coerce").fillna(method="ffill").fillna(method="bfill").fillna(0.0) / 1000.0
-        margin = (revenue_series.fillna(method="ffill").fillna(method="bfill") - fuel_cost - vom).fillna(-1e9)
+        fuel_cost = heat_rate * pd.to_numeric(df[gas_col], errors="coerce").ffill().bfill().fillna(0.0) / 1000.0
+        margin = (revenue_series.ffill().bfill() - fuel_cost - vom).fillna(-1e9)
 
         # Max dispatch based on export/site limits
         if export_mode == "non_export":
