@@ -1,0 +1,33 @@
+# Fries Hydroelectric Project. Phase 1 test asset.
+# Sources: FERC EA for P-2883 (Dec 2020); EIA-860M (2026-08); EIA-923; USGS.
+name: Fries Hydroelectric Project
+ids:
+  ferc_project: P-2883
+  eia_plant: 10798
+  pjm_queue: O31                     # 5.21 MW, operational (from owner research; not yet verified here)
+owner: Central Rivers Power US, LLC  # EIA-860M operator. FERC licensee of record: Aquenergy Systems, LLC
+location: {county: Grayson, state: VA, river: New River}
+market:
+  iso: PJM
+  zone: AEP
+  pnode: "FRIES 12 KV FRIESHYD"      # UNVERIFIED: confirm in the PJM pnode feed once PJM_API_KEY is set
+  timezone: America/New_York
+capacity:
+  nameplate_mw: 5.4                  # EIA-860M: GEN1 2.0, GEN2 0.8, GEN3 0.2, GEN4 2.4
+  net_summer_mw: 5.0
+  net_winter_mw: 4.9
+hydro:
+  usgs_site: "03164000"              # New River near Galax; drainage area ~= the dam's, so no scaling
+  gross_head_ft: 39.77               # pool 2,188.27 - tailrace 2,148.50 (EA 2.1.1)
+  q_max_cfs_prior: 2050              # mill units 1,250 + unit 4 800 (EA 2.1.4)
+  q_min_unit_cfs: 60                 # smallest unit's minimum (EA 2.1.4)
+  q_leakage_cfs: 10                  # spillway + canal leakage to the bypass (EA 2.1.4)
+  pondage_af: 440                    # gross storage; operated run-of-river within 0.2 ft
+  calibrated: null                   # filled by the calibration run (docs/calibration_protocol.md)
+capacity_market:
+  elcc_class: hydro_intermittent     # run-of-river; "hydro with non-pumped storage" if meaningful pondage
+cost_priors_ferc_ea_2020usd:         # Aquenergy figures in the EA (Table 6), 2020 dollars
+  annual_om_usd: 484010              # ~$95/kW-yr on 5.1 MW
+  relicensing_cost_usd: 348840
+  net_investment_usd: 904200
+  dependable_capacity_mw: 2.34

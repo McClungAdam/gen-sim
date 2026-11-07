@@ -81,14 +81,36 @@ Running log of assumptions, judgment calls and unverified facts. Each entry: wha
   (5.4 MW total); net summer 5.0 MW, winter 4.9 MW. Owner: Central Rivers Power US, LLC.
   Model cap uses **5.0 MW net summer**.
 
+## FERC record — P-2883 (researched 2026-11-07)
+
+- **FERC EA (Dec 2020)**: 41-ft dam; pool crest 2,188.27 ft, normal tailrace 2,148.50 ft, so gross
+  head is **39.8 ft**. Units: mill house 2.0 + 0.8 + 0.25 MW (combined 1,250 cfs) and unit 4 2.1 MW
+  Kaplan (800 cfs); total **2,050 cfs**; smallest unit minimum 60 cfs. Run-of-river within 0.2 ft;
+  ~10 cfs leakage to the bypass; spill ~29% of the time. Mean flow 1,946 cfs. EA average generation 26,150 MWh/yr.
+- **Relicensing risk:** Interior recommended bypass minimum flows at the 95% monthly exceedance level
+  (455–1,133 cfs). FERC staff rejected this as not worth its **$185,350/yr** levelized cost. A future
+  license or amendment could revive it; treat it as a downside scenario.
+- **Cost priors (EA Table 6, 2020$, from the applicant):** O&M $484,010/yr (~$95/kW-yr),
+  relicensing $348,840, net investment $904,200, dependable capacity 2.34 MW.
+- **License status: CONFLICT.** The brief says "annual licenses since 2020". FERC posted a
+  Commissioner Danly concurrence/dissent (Project No. 2883-009, dated 2022-01-20) on issuing
+  Aquenergy a **new license**. The order text and term are not yet retrieved (FERC page returned 403).
+  **Status: verify in eLibrary.** A search hit about a "surrender" was the Kelley's Falls project
+  (P-3025), not Fries.
+- **Ownership:** EIA-860M operator is Central Rivers Power US, LLC; FERC licensee of record is
+  Aquenergy Systems, LLC (transfer approved 2013). Their relationship is unverified.
+- **Contract status:** no Fries-specific QF Form 556 or PPA found by web search. FERC EQR was **not
+  checked** (it needs the EQR download tool). **Status: open.**
+
 ## Hydrology / calibration
 
 - **Hurricane Helene:** dam damaged Sept 2024 (>108,000 cfs over the spillway, per repair contractor);
   repairs underway. Sept 2024 onward = outage, excluded from calibration. Helene peak retained as a
   flood data point for the dam-safety reserve. Valuation gets two inputs: return-to-service date and
   repair/restoration capex (owner-borne vs insured split).
-- **Exclusion rules are written before fitting and applied mechanically** (rules to be recorded here
-  before the first fit).
+- **Exclusion rules are written before fitting and applied mechanically:** see
+  `docs/calibration_protocol.md` (R1 Helene, R2 missing data, R3 above nameplate, R4 actual < 50% of
+  the *prior-parameter* model at normal flow). Committed before the first fit.
 - **Holdout:** calibrate 2003–2012, validate 2013–2023 (minus excluded months). Report every year.
 
 ## Toolchain
