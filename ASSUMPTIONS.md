@@ -92,13 +92,31 @@ Running log of assumptions, judgment calls and unverified facts. Each entry: wha
   license or amendment could revive it; treat it as a downside scenario.
 - **Cost priors (EA Table 6, 2020$, from the applicant):** O&M $484,010/yr (~$95/kW-yr),
   relicensing $348,840, net investment $904,200, dependable capacity 2.34 MW.
-- **License status: CONFLICT.** The brief says "annual licenses since 2020". FERC posted a
-  Commissioner Danly concurrence/dissent (Project No. 2883-009, dated 2022-01-20) on issuing
-  Aquenergy a **new license**. The order text and term are not yet retrieved (FERC page returned 403).
-  **Status: verify in eLibrary.** A search hit about a "surrender" was the Kelley's Falls project
-  (P-3025), not Fries.
-- **Ownership:** EIA-860M operator is Central Rivers Power US, LLC; FERC licensee of record is
-  Aquenergy Systems, LLC (transfer approved 2013). Their relationship is unverified.
+- **License: NEW LICENSE, not annual licenses.** FERC issued Aquenergy Systems, LLC a new license
+  on **2022-01-20** (Order Issuing New License, 178 FERC ¶ 61,025, accession 20220120-3109; errata
+  20220201-3106; Commissioner Danly concurred in part, dissented in part). Annual licenses covered only
+  2020-06 → 2022-01. **The term and full operating articles are not yet retrieved**: the eLibrary file
+  download needs a browser session. Known from secondary sources: run-of-river (Article 402); an
+  article lets FERC require financial reserves; Interior's bypass min-flow 10(j) recommendation was
+  not adopted (Danly's partial dissent). **Status: Adam to pull the order to confirm term, minimum-flow
+  and fish-passage articles.**
+- **Ownership/operator chain (eLibrary filings):** Enel Green Power North America (2019) → Central
+  Rivers Power (2020–2022) → **Patriot Hydro, LLC** (2023+, filing "d/b/a" and "on behalf of" Aquenergy
+  Systems, LLC, the licensee of record). EIA-860M still lists Central Rivers Power US, LLC.
+- **eLibrary P-2883 since 2018 (500 filings reviewed by description):**
+  - 2019-07 *penstock wall repair* calculations (CEII; not retrieved); 2019-08 powerhouse intake
+    repair; certified 2020-07; final report accepted 2021-05. The concrete penstock feeds unit 4, which
+    supports the unit-4-out hypothesis (see `docs/stepdown_diagnostic.md`).
+  - Article 402 (run-of-river) deviations in 2023 and on 2024-09-05/06 (Helene); FERC did not treat
+    them as violations.
+  - Dam safety: hazard classification / inflow design flood work 2022–2024; **Spillway Capacity
+    Assessment open** (FERC letter 2026-11-04); First Part 12D comprehensive assessment accepted
+    2026-02. Feeds the dam-safety capex reserve.
+  - **Helene repair:** power canal wall rehabilitation (roller-compacted concrete buttress). 100%
+    design 2025-12; construction authorized **2026-02-11**; monthly construction reports from 2026-06;
+    design change accepted for review 2026-09/10. Return to service: not stated; ongoing as of 2026-11.
+  - **American Rivers moved to intervene (2026-07-15)**: reason not in the description. **Status: open.**
+  - Recreation: RMP amended 2025-04; extension requested to 2028-12-31 for new facilities (license capex).
 - **Contract status:** no Fries-specific QF Form 556 or PPA found by web search. FERC EQR was **not
   checked** (it needs the EQR download tool). **Status: open.**
 
@@ -114,7 +132,14 @@ Running log of assumptions, judgment calls and unverified facts. Each entry: wha
 - **EIA-923 monthly values 2001–2016 are imputed** (fractional MWh; EIA allocation of an annual
   filer's total). Fries reports monthly from 2017 (`Respondent Frequency = M` in 2020). Monthly
   tests against 2001–2016 are not meaningful. See `docs/calibration_v1_results.md`.
-  **Status: protocol v2 decision pending (Adam).**
+- **Protocol v2 (approved 2026-11-07):** annual fit 2003–2012 with availability = 1.0; validate
+  2013–2018; monthly r on metered 2017–18; 2019–2023 = as-operated regime. **v2 also fails** annual
+  ±5% (calibrate 6/10, validate 2/6) and monthly r (0.62); long-run +1.1% passes. See
+  `docs/calibration_v2_results.md`. Q_minflow fit at its 100 cfs bound and H·η = 0.62 × gross are
+  physically doubtful. The model probably lacks a head-vs-flow (tailwater) effect and unrecorded
+  outages. **Status: results reported; next step is Adam's call.**
+- **Valuation hydrology:** "restored" = v2 params (P50 26.5 GWh); "as operated" = regime params
+  (P_cap ≈ 2.5 MW; P50 19.2 GWh). Both are in `docs/calibration_params.json`.
 - **Holdout:** calibrate 2003–2012, validate 2013–2023 (minus excluded months). Report every year.
 
 ## Toolchain

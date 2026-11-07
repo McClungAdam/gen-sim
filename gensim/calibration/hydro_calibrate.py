@@ -145,3 +145,107 @@ def run(flow: pd.DataFrame, actual: pd.DataFrame) -> CalibrationResult:
     table = rules.monthly_table(flow, actual)
     p, info = fit(flow, table)
     return evaluate(flow, table, p, info)
+
+
+# ================================================================ protocol v2 (annual)
+# docs/calibration_protocol_v2.md
+V2_FREE = ["head_eff_ft", "q_max_cfs", "q_minflow_cfs"]          # availability fixed at 1.0
+
+
+def annual_model(flow: pd.DataFrame, p: HydroParams) -> pd.Series:
+    d = daily_energy(flow, p)
+    return d.groupby(d["date"].str[:4].astype(int))["mwh"].sum(min_count=1)
+
+
+def _v2_params(x, p_cap=rules.PRIOR.p_cap_mw) -> HydroParams:
+    return HydroParams(head_eff_ft=float(x[0]), q_max_cfs=float(x[1]), q_minflow_cfs=float(x[2]),
+                       availability=1.0, p_cap_mw=p_cap)
+
+
+def fit_annual(flow: pd.DataFrame, at: pd.DataFrame) -> tuple[HydroParams, dict]:
+    cal = at[(at["period"] == "calibrate") & ~at["excluded"]]
+    years, actual = cal["year"].tolist(), cal["actual_mwh"].to_numpy()
+    f = flow[flow["date"].str[:4].astype(int).isin(years)]
+
+    def sse(x):
+        return float(np.sum((annual_model(f, _v2_params(x)).reindex(years).to_numpy() - actual) ** 2))
+
+    bounds = [BOUNDS[n] for n in V2_FREE]
+    best = None
+    for s in product(np.linspace(*bounds[0], 3), np.linspace(*bounds[1], 3), [10.0, 50.0]):
+        r = minimize(sse, np.array(s), method="Powell", bounds=bounds, options={"xtol": 1e-4, "ftol": 1e-12, "maxiter": 20000})
+        if best is None or r.fun < best.fun:
+            best = r
+    at_bound = [n for n, v, (l, h) in zip(V2_FREE, best.x, bounds) if np.isclose(v, l, rtol=1e-3) or np.isclose(v, h, rtol=1e-3)]
+    return _v2_params(best.x), {"sse": best.fun, "rmse_mwh": float(np.sqrt(best.fun / len(years))),
+                                "years": years, "at_bound": at_bound, "success": bool(best.success)}
+
+
+def run_v2(flow: pd.DataFrame, actual: pd.DataFrame) -> dict:
+    at = rules.annual_table(flow, actual)
+    p, info = fit_annual(flow, at)
+    am = annual_model(flow, p)
+    at["model_mwh"] = at["year"].map(am)
+    at["error_pct"] = 100 * (at["model_mwh"] - at["actual_mwh"]) / at["actual_mwh"].replace(0, np.nan)
+    at["ratio_actual_to_model"] = at["actual_mwh"] / at["model_mwh"]
+    at["within_5pct"] = (at["error_pct"].abs() <= 5.0).astype("boolean")
+    at.loc[at["excluded"] | ~at["period"].isin(["calibrate", "validate"]), "within_5pct"] = pd.NA
+
+    metrics = {}
+    for per in ("calibrate", "validate"):
+        k = at[(at["period"] == per) & ~at["excluded"]]
+        metrics[per] = {
+            "years_used": [int(y) for y in k["year"]],
+            "years_excluded": {int(r.year): r.exclude_reason for r in at[(at["period"] == per) & at["excluded"]].itertuples()},
+            "years_within_5pct": int(k["within_5pct"].astype(bool).sum()),
+            "worst_abs_error_pct": float(k["error_pct"].abs().max()),
+            "bias_pct": float(100 * (k["model_mwh"].sum() / k["actual_mwh"].sum() - 1)),
+        }
+    # monthly check on metered months only
+    mm = monthly_energy(flow, p).set_index("month")["model_mwh"]
+    met = actual[actual["month"].between(*rules.V2_MONTHLY_CHECK)].copy()
+    met["model_mwh"] = met["month"].map(mm)
+    metrics["monthly_metered"] = {"months": int(len(met)), "monthly_r": _corr(met["model_mwh"].to_numpy(), met["net_generation_mwh"].to_numpy()),
+                                  "bias_pct": float(100 * (met["model_mwh"].sum() / met["net_generation_mwh"].sum() - 1))}
+    lr = at[at["year"].between(2003, 2016)]
+    metrics["long_run"] = {"model_mean_mwh": float(lr["model_mwh"].mean()), "actual_mean_mwh": float(lr["actual_mwh"].mean()),
+                           "model_vs_published_pct": float(100 * (lr["model_mwh"].mean() / PUBLISHED_LONG_RUN_MWH - 1))}
+    metrics["acceptance"] = {
+        "annual_within_5pct_all": all(metrics[x]["years_within_5pct"] == len(metrics[x]["years_used"]) for x in ("calibrate", "validate")),
+        "monthly_r_ge_0.9_metered_2017_2018": metrics["monthly_metered"]["monthly_r"] >= 0.9,
+        "long_run_within_5pct": abs(metrics["long_run"]["model_vs_published_pct"]) <= 5.0,
+    }
+    wy, exc = water_year_scenarios(flow, p, last=2023)
+    return {"params": p, "fit_info": info, "annual": at, "metrics": metrics, "metered": met,
+            "water_years": wy, "exceedance": exc}
+
+
+def fit_regime(flow: pd.DataFrame, target: pd.DataFrame, base: HydroParams, key: str,
+               q_bounds=(300.0, 2300.0), cap_bounds=(0.5, 5.0)) -> tuple[HydroParams, dict, pd.DataFrame]:
+    """Refit Q_max and P_cap only, holding H*eta and Q_minflow at `base`.
+
+    target: columns [key, actual] where key is 'year' (int) or 'month' (YYYY-MM). Returns params,
+    info, and an SSE grid over (Q_max, P_cap) to show identifiability.
+    """
+    keys = target[key].tolist(); y = target["actual"].to_numpy()
+    sel = flow["date"].str[:4].astype(int).isin({int(str(k)[:4]) for k in keys})
+    f = flow[sel]
+
+    def model(qmax, cap):
+        p = HydroParams(base.head_eff_ft, qmax, base.q_minflow_cfs, 1.0, cap)
+        if key == "year":
+            return annual_model(f, p).reindex(keys).to_numpy()
+        return monthly_energy(f, p).set_index("month")["model_mwh"].reindex(keys).to_numpy()
+
+    def sse(x):
+        return float(np.sum((model(*x) - y) ** 2))
+
+    best = None
+    for s in product(np.linspace(*q_bounds, 4), np.linspace(*cap_bounds, 4)):
+        r = minimize(sse, np.array(s), method="Powell", bounds=[q_bounds, cap_bounds], options={"xtol": 1e-3, "maxiter": 20000})
+        if best is None or r.fun < best.fun:
+            best = r
+    grid = pd.DataFrame([{"q_max_cfs": q, "p_cap_mw": c, "rmse": np.sqrt(sse((q, c)) / len(y))}
+                         for q in np.arange(400, 2301, 100) for c in np.arange(1.0, 5.01, 0.25)])
+    p = HydroParams(base.head_eff_ft, float(best.x[0]), base.q_minflow_cfs, 1.0, float(best.x[1]))
+    return p, {"rmse": float(np.sqrt(best.fun / len(y))), "n": len(y), "success": bool(best.success)}, grid

@@ -1,0 +1,32 @@
+{
+  "restored_v2": {
+    "head_eff_ft": 24.69341116816913,
+    "q_max_cfs": 2234.38304037271,
+    "q_minflow_cfs": 99.99999998414854,
+    "availability": 1.0,
+    "p_cap_mw": 5.0
+  },
+  "as_operated_regime": {
+    "head_eff_ft": 24.69341116816913,
+    "q_max_cfs": 1536.068502541659,
+    "q_minflow_cfs": 99.99999998414854,
+    "availability": 1.0,
+    "p_cap_mw": 2.4643342924317246
+  },
+  "exceedance_restored": {
+    "P10_mwh": 32140.815925297204,
+    "P50_mwh": 26509.497815898307,
+    "P90_mwh": 19308.898792795146,
+    "mean_mwh": 25888.82492513481,
+    "water_years": "1930-2023",
+    "n": 94
+  },
+  "exceedance_as_operated": {
+    "P10_mwh": 20699.81555316495,
+    "P50_mwh": 19186.992761082292,
+    "P90_mwh": 15152.40893466121,
+    "mean_mwh": 18445.482550382316,
+    "water_years": "1930-2023",
+    "n": 94
+  }
+}

@@ -34,3 +34,19 @@ def test_water_years_complete_only():
     wy, exc = hc.water_year_scenarios(flow, rules.PRIOR)
     assert wy["days"].min() >= 365 and exc["n"] == len(wy)
     assert wy["wy"].max() == 2023   # WY2024 (Oct 2023-Sep 2024) is incomplete: data end 2024-08-31
+
+
+def test_fit_regime_recovers_cap():
+    days = pd.date_range("2021-01-01", "2023-12-31", freq="D")
+    rng = np.random.default_rng(3)
+    q = (1800 + 800 * np.cos(2 * np.pi * (days.day_of_year - 60) / 365.25)) * np.exp(rng.normal(0, 0.4, len(days)))
+    flow = pd.DataFrame({"date": days.strftime("%Y-%m-%d"), "q_cfs": q})
+    base = HydroParams(25.0, 2200.0, 50.0, 1.0, 5.0)
+    truth = HydroParams(25.0, 2200.0, 50.0, 1.0, 2.5)        # cap binds before the flow limit
+    m = monthly_energy(flow, truth)[["month", "model_mwh"]].rename(columns={"model_mwh": "actual"})
+    p, info, grid = hc.fit_regime(flow, m, base, "month")
+    # Only the binding limit is identified: compare output, not raw (Q_max, P_cap)
+    assert info["rmse"] < 1.0
+    assert p.p_cap_mw == pytest.approx(2.5, abs=0.05) or p.q_max_cfs < 1300
+    assert p.head_eff_ft == base.head_eff_ft and p.q_minflow_cfs == base.q_minflow_cfs
+    assert {"q_max_cfs", "p_cap_mw", "rmse"} <= set(grid.columns)
