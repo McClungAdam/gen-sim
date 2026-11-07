@@ -36,7 +36,7 @@ def fetch_duk_demand(paths: Paths) -> pd.DataFrame:
     data = j["response"]["data"]
 
     df = pd.DataFrame(data)
-    df["timestamp"] = pd.to_datetime(df["period"])
+    df["timestamp"] = pd.to_datetime(df["period"], utc=True)  # EIA-930 hourly periods are UTC
     df = df[["timestamp", "value"]].sort_values("timestamp")
 
     df.to_csv(paths.demand, index=False)

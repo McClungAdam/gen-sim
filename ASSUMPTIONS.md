@@ -35,6 +35,17 @@ Running log of assumptions, judgment calls and unverified facts. Each entry: wha
   DUK revenue only via explicit avoided cost; any other series via a user CSV (`GENSIM_PRICE_FILE`).
   Series with median > $1,000/MWh are rejected as "looks like MW", never rescaled.
 
+## Timestamps (defect #4)
+
+- Internal convention: tz-aware UTC; every file the pipeline writes carries `+00:00`. Naive
+  timestamps in pipeline-written files raise instead of being guessed.
+- Market zone per config `market.timezone`, default `America/New_York` (PJM EPT; Duke Eastern).
+- Human inputs (maintenance/PPA/curtailment/DR windows, `--as-of`) are **market-local** time.
+- EIA-930 hourly `period` values are UTC (EIA documentation).
+- **Henry Hub daily price applies to the local calendar day** (midnight-to-midnight Eastern).
+  Simplification: the NAESB gas day runs 9:00–9:00 Central. Immaterial for Phase 1 hydro.
+- User price files: naive = `market.price_file_timezone` (default market zone); DST gaps raise.
+
 ## Secrets
 
 - The same EIA key appeared in 6 legacy files (`get_demand.py`, `get_gas_prices.py`, `config.json`

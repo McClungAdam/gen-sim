@@ -15,7 +15,7 @@ def test_demand_sized_series_is_rejected_not_divided_by_100():
     # Legacy behavior: median > 1000 -> /100, which turned Duke demand (MW) into "$/MWh".
     raw = pd.read_csv(FIX / "raw_prices_large.csv")
     with pytest.raises(ValueError, match="looks like load in MW"):
-        normalize_prices_df(raw)
+        normalize_prices_df(raw, assume_tz="UTC")
 
 
 def test_plausible_prices_pass_through_unscaled():

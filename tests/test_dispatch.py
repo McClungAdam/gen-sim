@@ -7,7 +7,7 @@ from gensim.config import Paths
 
 
 def _run(tmp_path, price, gen_overrides=None, fuel_available=None, n=8):
-    ts = pd.date_range("2025-03-07 00:00", periods=n, freq="h")
+    ts = pd.date_range("2025-03-07 05:00", periods=n, freq="h", tz="UTC")  # = 00:00 EST
     df = pd.DataFrame({
         "timestamp": ts,
         "gas_price_effective": 4.0,           # 9000 Btu/kWh -> $36/MWh fuel
@@ -39,7 +39,7 @@ def test_negative_margin_never_dispatched(tmp_path):
 
 
 def test_maintenance_window_forces_off(tmp_path):
-    w = [{"start": "2025-03-07 02:00", "end": "2025-03-07 05:00", "reason": "test"}]
+    w = [{"start": "2025-03-07 02:00", "end": "2025-03-07 05:00", "reason": "test (EST)"}]
     out = _run(tmp_path, price=80.0, gen_overrides={"maintenance_windows": w, "min_up_hours": 24})
     assert out["g_run"].tolist() == [True, True, False, False, False, True, True, True]
 

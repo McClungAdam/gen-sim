@@ -27,7 +27,7 @@ def main(argv=None) -> int:
     ap.add_argument("--no-fetch", action="store_true", help="skip network fetches; use cached files")
     ap.add_argument("--only", choices=STAGES, help="run a single stage")
     ap.add_argument("--as-of", type=datetime.fromisoformat, default=None,
-                    help="treat this local time as 'now' for the merge window (ISO, e.g. 2025-03-12T00:00)")
+                    help="treat this market-local time (or ISO with offset) as 'now' for the merge window")
     args = ap.parse_args(argv)
 
     stages = {args.only} if args.only else set(STAGES) - ({"fetch"} if args.no_fetch else set())

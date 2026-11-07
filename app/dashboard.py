@@ -7,6 +7,7 @@ from datetime import datetime
 
 from gensim import pipeline
 from gensim.config import DEFAULT_CONFIG, DEFAULT_WORKDIR, Paths
+from gensim.timeutil import market_tz
 
 st.set_page_config(layout="wide")
 st.title("🔌 Generator Dispatch Simulator Dashboard")
@@ -69,7 +70,11 @@ else:
 
 # ---------- Load results ----------
 if os.path.exists(RESULTS_PATH):
-    df = pd.read_csv(RESULTS_PATH, parse_dates=["timestamp"])
+    df = pd.read_csv(RESULTS_PATH)
+    # Pipeline files are tz-aware UTC; show market-local wall time (display only).
+    DISPLAY_TZ = market_tz(CONFIG)
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).dt.tz_convert(DISPLAY_TZ).dt.tz_localize(None)
+    st.caption(f"Times shown in {DISPLAY_TZ}.")
 else:
     st.warning(f"{RESULTS_PATH.name} not found. Run a simulation to populate charts.")
     df = pd.DataFrame(columns=["timestamp"])

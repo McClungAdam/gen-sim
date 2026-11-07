@@ -30,8 +30,8 @@ INPUT_CSVS = [
 ]
 RAW_PRICE_CASES = ["normal"]  # "large" (demand-like) must now raise: tests/test_market_prices.py
 
-# "Now" for the frozen clock: just after the fixture window ends (naive local, as the legacy
-# merge used datetime.now()); merge_weather compares against tz-aware UTC.
+# "Now" for the frozen clock: just after the fixture window ends. Naive -> market time
+# (America/New_York) per gensim.timeutil; merge_weather takes UTC.
 FROZEN_NOW = datetime(2025, 3, 12, 0, 0)
 FROZEN_NOW_UTC = FROZEN_NOW.replace(tzinfo=timezone.utc)
 
@@ -61,6 +61,6 @@ def run_normalize_prices(workdir: Path) -> dict[str, Path]:
     for case in RAW_PRICE_CASES:
         raw = pd.read_csv(workdir / f"raw_prices_{case}.csv")
         path = workdir / f"normalized_prices_{case}.csv"
-        normalize_prices_df(raw).to_csv(path, index=False)
+        normalize_prices_df(raw, assume_tz="UTC").to_csv(path, index=False)  # EIA-style periods are UTC
         outs[f"normalized_prices_{case}"] = path
     return outs

@@ -1,7 +1,13 @@
 """Build the merged hourly/15-min input timeline. Ported from legacy merge_inputs.py; behavior unchanged.
 
+Timestamps: tz-aware UTC throughout (gensim.timeutil). Source rules:
+  demand (EIA-930)           naive = UTC (documented by EIA)
+  merged_weather, prices     written by this pipeline: must carry offsets, naive raises
+  gas (daily)                calendar day -> start of that day in market time
+  site_load / avoided_cost   user files: naive = market time
+  config/CSV windows, `now`  human input: naive = market time
+
 KNOWN DEFECTS (fixed in follow-up commits, pinned by tests/golden):
-  #4   mixes naive UTC, naive "NY" and local-clock timestamps.
   #5   gas forward-fill stops at the last daily print.
 """
 from __future__ import annotations
@@ -13,6 +19,7 @@ import numpy as np
 import pandas as pd
 
 from gensim.config import Paths
+from gensim.timeutil import dates_to_utc_day_start, market_tz, now_utc, series_to_utc
 from gensim.windows import flag_windows as _flag_windows
 
 LOOKBACK_DAYS = 45
@@ -50,13 +57,20 @@ def _resample_ffill(df, freq):
     return df.reset_index()
 
 
-def _load_csv(fname, parse_dates):
+def _load_csv(fname, ts_col="timestamp", assume_tz=None, as_day_start_tz=None):
+    """Read a cached/user CSV and convert `ts_col` to tz-aware UTC (see module docstring)."""
     if not os.path.exists(fname):
         return None
     try:
-        return pd.read_csv(fname, parse_dates=parse_dates).dropna()
+        df = pd.read_csv(fname).dropna()
     except Exception:
         return None
+    if ts_col in df.columns:
+        if as_day_start_tz:
+            df[ts_col] = dates_to_utc_day_start(df[ts_col], as_day_start_tz)
+        else:
+            df[ts_col] = series_to_utc(df[ts_col], assume_tz)
+    return df
 
 
 def merge_inputs(cfg: dict, paths: Paths, now: datetime | None = None) -> pd.DataFrame:
@@ -64,14 +78,15 @@ def merge_inputs(cfg: dict, paths: Paths, now: datetime | None = None) -> pd.Dat
     ops = cfg.get("operations", {})
     gas_basis = float(cfg.get("gas", {}).get("basis_adder_per_mmbtu", 0.0))
 
-    now = now if now is not None else datetime.now()
+    tz = market_tz(cfg)
+    now = now_utc(now, tz)
     window_start = now - timedelta(days=LOOKBACK_DAYS)
     window_end = now + timedelta(days=LOOKAHEAD_DAYS)
 
-    demand = _load_csv(paths.demand, ["timestamp"])
-    weather = _load_csv(paths.merged_weather, ["timestamp"])
-    prices = _load_csv(paths.market_price, ["timestamp"])
-    gas = _load_csv(paths.gas, ["date"])
+    demand = _load_csv(paths.demand, assume_tz="UTC")
+    weather = _load_csv(paths.merged_weather, assume_tz=None)
+    prices = _load_csv(paths.market_price, assume_tz=None)
+    gas = _load_csv(paths.gas, ts_col="date", as_day_start_tz=tz)
 
     if demand is not None and "value" in demand.columns:
         demand = demand.rename(columns={"value": "demand_mw"})
@@ -129,7 +144,7 @@ def merge_inputs(cfg: dict, paths: Paths, now: datetime | None = None) -> pd.Dat
             merged = merged.merge(w[["timestamp"] + cols], on="timestamp", how="left")
 
     # Optional series
-    site_load = _load_csv(paths.site_load, ["timestamp"])
+    site_load = _load_csv(paths.site_load, assume_tz=tz)
     if site_load is not None and not site_load.empty:
         if "load_mw" in site_load.columns:
             site_load = site_load.rename(columns={"load_mw": "site_load_mw"})
@@ -138,7 +153,7 @@ def merge_inputs(cfg: dict, paths: Paths, now: datetime | None = None) -> pd.Dat
     else:
         merged["site_load_mw"] = merged.get("site_load_mw", np.nan)
 
-    avoided = _load_csv(paths.avoided_cost, ["timestamp"])
+    avoided = _load_csv(paths.avoided_cost, assume_tz=tz)
     if avoided is not None and not avoided.empty:
         if "price_mwh" in avoided.columns:
             avoided = avoided.rename(columns={"price_mwh": "avoided_cost_mwh"})
@@ -158,7 +173,7 @@ def merge_inputs(cfg: dict, paths: Paths, now: datetime | None = None) -> pd.Dat
     dr_windows = ops.get("dr_event_windows", []) + _load_windows_csv(paths.dr_events)
     ppa_windows = ops.get("ppa_windows", [])
 
-    idx = pd.to_datetime(merged["timestamp"])
+    idx = merged["timestamp"]
 
     # Export cap
     export_mode = ops.get("export_mode", "full_export")
@@ -175,12 +190,12 @@ def merge_inputs(cfg: dict, paths: Paths, now: datetime | None = None) -> pd.Dat
     merged["permit_allowed"] = 0 if permit_class == "emergency" else 1
 
     fuel_contract = ops.get("fuel_contract", "firm")
-    fuel_mask = _flag_windows(idx, fuel_windows)
+    fuel_mask = _flag_windows(idx, fuel_windows, tz)
     merged["fuel_available"] = (1 - fuel_mask).astype(int) if fuel_contract == "interruptible" else 1
 
-    merged["event_active"] = _flag_windows(idx, dr_windows)
+    merged["event_active"] = _flag_windows(idx, dr_windows, tz)
     if ppa_windows:
-        merged["ppa_active"] = _flag_windows(idx, ppa_windows)
+        merged["ppa_active"] = _flag_windows(idx, ppa_windows, tz)
     else:
         merged["ppa_active"] = 1 if ops.get("program_mode", "WHOLESALE") in ("PURPA", "NET_METERING") else 0
 

@@ -17,6 +17,7 @@ import pandas as pd
 
 from gensim.config import Paths
 from gensim.units import fuel_cost_per_mwh
+from gensim.timeutil import market_tz, series_to_utc
 from gensim.windows import flag_windows
 
 
@@ -34,7 +35,9 @@ def simulate(cfg: dict, paths: Paths, now: datetime | None = None) -> pd.DataFra
     generators = CONFIG.get("generators", [])
     ops = CONFIG.get("operations", {})
 
-    df = pd.read_csv(paths.merged_inputs, parse_dates=["timestamp"]).sort_values("timestamp")
+    df = pd.read_csv(paths.merged_inputs)
+    df["timestamp"] = series_to_utc(df["timestamp"], assume_tz=None)
+    df = df.sort_values("timestamp").reset_index(drop=True)
 
     # dt_hours
     dt = df["timestamp"].diff().dt.total_seconds().bfill().fillna(3600)/3600.0
@@ -108,7 +111,7 @@ def simulate(cfg: dict, paths: Paths, now: datetime | None = None) -> pd.DataFra
         hours_since_change = 1e9
         min_up = int(gen.get("min_up_hours", 0))
         min_down = int(gen.get("min_down_hours", 0))
-        in_maintenance = flag_windows(df["timestamp"], gen.get("maintenance_windows", [])).astype(bool)
+        in_maintenance = flag_windows(df["timestamp"], gen.get("maintenance_windows", []), market_tz(CONFIG)).astype(bool)
 
         for i in range(len(df)):
             econ = float(margin.iloc[i]) > threshold

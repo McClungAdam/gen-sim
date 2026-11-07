@@ -16,6 +16,7 @@ import pandas as pd
 import requests
 
 from gensim.config import Paths
+from gensim.timeutil import market_tz, series_to_utc
 
 # Values this large are not plausible $/MWh medians; the legacy code silently divided them by 100,
 # which turned EIA-930 demand (MW) into a fake price. Refuse instead.
@@ -26,20 +27,20 @@ class NoPriceSource(RuntimeError):
     """No price source is configured for this market."""
 
 
-def normalize_prices_df(df: pd.DataFrame) -> pd.DataFrame:
-    # Accept flexible inputs, but enforce timestamp + price_mwh and naive local (America/New_York)
+def normalize_prices_df(df: pd.DataFrame, assume_tz: str | None = "America/New_York") -> pd.DataFrame:
+    """-> columns timestamp (tz-aware UTC), price_mwh.
+
+    Offset-aware input is converted; naive input is market-local time `assume_tz` (defect #4: the
+    legacy code labeled UTC data as New York and silently shifted the spring-forward hour).
+    """
     if "timestamp" not in df.columns and "period" in df.columns:
         df = df.rename(columns={"period": "timestamp"})
     if "price_mwh" not in df.columns and "value" in df.columns:
         df = df.rename(columns={"value": "price_mwh"})
     if not {"timestamp", "price_mwh"}.issubset(df.columns):
         raise ValueError("Input must contain 'timestamp' and 'price_mwh' (or mappable columns).")
-    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-    # If tz-aware, convert to America/New_York and drop tz; if tz-naive, localize as NY then drop tz
-    if isinstance(df["timestamp"].dtype, pd.DatetimeTZDtype):
-        df["timestamp"] = df["timestamp"].dt.tz_convert("America/New_York").dt.tz_localize(None)
-    else:
-        df["timestamp"] = df["timestamp"].dt.tz_localize("America/New_York", nonexistent="shift_forward", ambiguous="NaT").dt.tz_localize(None)
+    df = df.copy()
+    df["timestamp"] = series_to_utc(df["timestamp"], assume_tz)
     df["price_mwh"] = pd.to_numeric(df["price_mwh"], errors="coerce")
     med = df["price_mwh"].median()
     if pd.notna(med) and med > IMPLAUSIBLE_PRICE_MEDIAN:
@@ -83,7 +84,7 @@ def fetch_market_prices(cfg: dict, paths: Paths) -> pd.DataFrame:
         else:
             hint = "Supply a price CSV via GENSIM_PRICE_FILE."
         raise NoPriceSource(f"No price source for BA={ba}. EIA publishes no hourly LMPs. {hint}")
-    out = normalize_prices_df(df)
+    out = normalize_prices_df(df, assume_tz=cfg.get("market", {}).get("price_file_timezone", market_tz(cfg)))
     out.to_csv(paths.market_price, index=False)
     print(f"✅ Saved {paths.market_price.name} with {len(out)} rows for BA={ba} from user price file")
     return out

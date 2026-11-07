@@ -2,7 +2,7 @@
 
 No real API data. Shapes mimic what the legacy fetchers write to disk:
   duke_demand.csv       timestamp (naive, UTC hours as EIA-930 returns them), value (MW)
-  market_price.csv      timestamp (naive), price_mwh
+  market_price.csv      timestamp (UTC, explicit +00:00 as the pipeline writes it), price_mwh
   henry_hub_daily.csv   date, price ($/MMBtu); weekdays only, like the EIA spot series
   weather_observed.csv  timestamp (tz-aware UTC, NWS obs at :51), temp_f, condition, windSpeed, temperatureUnit
   weather_forecast.csv  timestamp (tz-aware, -05:00), temp_f, temperatureUnit, windSpeed ("5 mph"), condition
@@ -51,7 +51,7 @@ def prices():
         p = 38 + 22 * math.sin(2 * math.pi * (t.hour - 10) / 24) + 3 * ((h * 7) % 5)
         if h == 75:
             p = -12.5
-        rows.append([t.strftime("%Y-%m-%d %H:%M:%S"), round(p, 2)])
+        rows.append([t.strftime("%Y-%m-%d %H:%M:%S+00:00"), round(p, 2)])
     _write("market_price.csv", ["timestamp", "price_mwh"], rows)
 
 

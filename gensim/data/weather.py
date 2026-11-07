@@ -12,6 +12,7 @@ import pandas as pd
 import requests
 
 from gensim.config import Paths, user_agent
+from gensim.timeutil import series_to_utc
 
 STATION = "KINT"            # Winston-Salem Airport
 MAX_LOOKBACK_HRS = 168      # max NOAA window (~7 days)
@@ -97,18 +98,20 @@ def fetch_forecast(paths: Paths) -> pd.DataFrame:
 
 def merge_weather(paths: Paths, now: datetime | None = None) -> pd.DataFrame:
     """Observed (<= now) + forecast (> now) -> merged_weather.csv. `now` is injectable for tests."""
-    observed = pd.read_csv(paths.weather_observed, parse_dates=["timestamp"])
-    forecast = pd.read_csv(paths.weather_forecast, parse_dates=["timestamp"])
+    observed = pd.read_csv(paths.weather_observed)
+    forecast = pd.read_csv(paths.weather_forecast)
+    # NWS times carry offsets (forecast offsets change across DST): parse each to UTC.
+    observed["timestamp"] = series_to_utc(observed["timestamp"], assume_tz=None)
+    forecast["timestamp"] = series_to_utc(forecast["timestamp"], assume_tz=None)
 
-    now = now if now is not None else datetime.now(timezone.utc)
+    now = pd.Timestamp(now if now is not None else datetime.now(timezone.utc)).tz_convert("UTC")
     observed = observed[observed["timestamp"] <= now]
     forecast = forecast[forecast["timestamp"] > now]
 
     merged = pd.concat([observed, forecast], ignore_index=True)
     merged = merged.drop_duplicates(subset=["timestamp"]).sort_values("timestamp")
 
-    # Normalize timestamps: strip timezone (KEEP native cadence; do NOT round to hour)
-    merged["timestamp"] = pd.to_datetime(merged["timestamp"], utc=True).dt.tz_localize(None)
+    # Keep native cadence (do NOT round to hour); timestamps stay tz-aware UTC (defect #4).
 
     merged.to_csv(paths.merged_weather, index=False)
     print(f"✅ Saved {paths.merged_weather.name} with {len(merged)} rows "
