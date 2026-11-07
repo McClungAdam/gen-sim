@@ -3,8 +3,6 @@
 KNOWN DEFECTS (fixed in follow-up commits, pinned by tests/golden):
   #4   mixes naive UTC, naive "NY" and local-clock timestamps.
   #5   gas forward-fill stops at the last daily print.
-  #10  _flag_windows returns a timestamp-indexed Series assigned into a RangeIndex frame,
-       so fuel_available / event_active / ppa_active become NaN when any window is set.
 """
 from __future__ import annotations
 
@@ -31,16 +29,17 @@ def _target_freq(steps):
     return "15min" if any(s < 3600 for s in steps if s != float("inf")) else "h"
 
 
-def _flag_windows(index_ts, windows):
-    if not windows:
-        return pd.Series(0, index=index_ts, dtype=int)
-    mask = pd.Series(0, index=index_ts, dtype=int)
-    for w in windows:
+def _flag_windows(ts: pd.Series, windows) -> pd.Series:
+    """1 where ts falls in any [start, end) window, else 0. Aligned to ts.index (defect #10:
+    the legacy version indexed the mask by the timestamps themselves, so assigning it into the
+    RangeIndex frame produced all-NaN flags)."""
+    mask = pd.Series(0, index=ts.index, dtype=int)
+    for w in windows or []:
         try:
             s = pd.to_datetime(w.get("start")); e = pd.to_datetime(w.get("end"))
             if pd.isna(s) or pd.isna(e):
                 continue
-            mask |= ((index_ts >= s) & (index_ts < e)).astype(int)
+            mask |= ((ts >= s) & (ts < e)).astype(int)
         except Exception:
             continue
     return mask
