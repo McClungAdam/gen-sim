@@ -67,6 +67,20 @@ Running log of assumptions, judgment calls and unverified facts. Each entry: wha
   eLibrary for a Form 556 (QF). A "contracted" toggle (fixed $/MWh, capacity sold or not) will model
   an inherited PPA. **Status: open.**
 
+## Data sources (verified 2026-11-07)
+
+- **USGS 03164000** daily mean discharge: 35,466 days, 1929-10-01 → 2026-11-06 (298 provisional).
+  The OGC API (`/ogcapi/v1`; v0 forwards to it) and legacy NWIS dv agree on every day. The OGC
+  API refuses to page when `sortby` is set, so results are sorted locally.
+- **EIA-923** plant 10798 monthly net generation 2001-01 → 2026-08 (fuel2002=ALL, primeMover=ALL).
+  2003–2016 mean = **26,081 MWh/yr** (published figure: 26,150). 2025-01 onward = 0 (Helene).
+- **Observed step-down:** 2019 = 12.5 GWh, 2020 = 10.6 GWh, 2021–2024 ≈ 17.9–19.5 GWh/yr vs
+  ≈ 26 GWh before. Cause unknown (unit(s) out? operating change under annual licenses?). This
+  matters for valuation: "as operated recently" vs "restored to historical". **Status: open (Adam).**
+- **EIA-860M (2026-08):** 4 units, all OP: GEN1 2.0, GEN2 0.8, GEN3 0.2, GEN4 2.4 MW nameplate
+  (5.4 MW total); net summer 5.0 MW, winter 4.9 MW. Owner: Central Rivers Power US, LLC.
+  Model cap uses **5.0 MW net summer**.
+
 ## Hydrology / calibration
 
 - **Hurricane Helene:** dam damaged Sept 2024 (>108,000 cfs over the spillway, per repair contractor);

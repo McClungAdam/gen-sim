@@ -17,6 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = REPO_ROOT / "config"
 DEFAULT_CONFIG = CONFIG_DIR / "gas_genset.json"
 DEFAULT_WORKDIR = Path(os.getenv("GENSIM_WORKDIR", REPO_ROOT / "outputs"))
+DATA_CACHE = Path(os.getenv("GENSIM_DATA_CACHE", REPO_ROOT / "data_cache"))   # gitignored
 
 
 _KEY_PARAM = re.compile(r"(api_key=)[^&\s'\"]+", re.IGNORECASE)
