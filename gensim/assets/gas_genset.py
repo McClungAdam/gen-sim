@@ -1,16 +1,19 @@
-import json
-import numpy as np
-import pandas as pd
+"""Gas genset dispatch simulation. Ported from legacy simulate_generator.py; behavior unchanged.
+
+Heat rate is config Btu/kWh; fuel cost $/MWh = heat_rate * gas($/MMBtu) / 1000.
+
+KNOWN DEFECTS (fixed in follow-up commits, pinned by tests/golden):
+  #8  maintenance_windows are stored in config but never applied.
+"""
+from __future__ import annotations
+
 from datetime import datetime
 
-CONFIG_PATH = "config.json"
-INPUT_PATH = "merged_inputs.csv"
-OUTPUT_PATH = "simulation_results.csv"
-LAST_UPDATED = "last_updated.txt"
+import numpy as np
+import pandas as pd
 
-def load_config(path=CONFIG_PATH):
-    with open(path, "r") as f:
-        return json.load(f)
+from gensim.config import Paths
+
 
 def _safe_gate(df, col, default=0):
     if col in df.columns:
@@ -19,12 +22,14 @@ def _safe_gate(df, col, default=0):
         s = pd.Series(default, index=df.index)
     return s.astype(int)
 
-def main():
-    CONFIG = load_config()
+
+def simulate(cfg: dict, paths: Paths, now: datetime | None = None) -> pd.DataFrame:
+    """Dispatch each configured generator over paths.merged_inputs -> paths.simulation_results."""
+    CONFIG = cfg
     generators = CONFIG.get("generators", [])
     ops = CONFIG.get("operations", {})
 
-    df = pd.read_csv(INPUT_PATH, parse_dates=["timestamp"]).sort_values("timestamp")
+    df = pd.read_csv(paths.merged_inputs, parse_dates=["timestamp"]).sort_values("timestamp")
 
     # dt_hours
     dt = df["timestamp"].diff().dt.total_seconds().bfill().fillna(3600)/3600.0
@@ -134,11 +139,10 @@ def main():
                 hours_since_change = 0.0
             current_output = output
 
-    df.to_csv(OUTPUT_PATH, index=False)
-    print(f"✅ Saved {OUTPUT_PATH} with {len(df)} rows and {len(generators)} generators simulated")
+    df.to_csv(paths.simulation_results, index=False)
+    print(f"✅ Saved {paths.simulation_results.name} with {len(df)} rows and {len(generators)} generators simulated")
 
-    with open(LAST_UPDATED, "w") as f:
-        f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-
-if __name__ == "__main__":
-    main()
+    stamp = now if now is not None else datetime.now()
+    with open(paths.last_updated, "w") as f:
+        f.write(stamp.strftime("%Y-%m-%d %H:%M:%S"))
+    return df

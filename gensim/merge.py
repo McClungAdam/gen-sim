@@ -1,23 +1,24 @@
+"""Build the merged hourly/15-min input timeline. Ported from legacy merge_inputs.py; behavior unchanged.
+
+KNOWN DEFECTS (fixed in follow-up commits, pinned by tests/golden):
+  #4   mixes naive UTC, naive "NY" and local-clock timestamps.
+  #5   gas forward-fill stops at the last daily print.
+  #10  _flag_windows returns a timestamp-indexed Series assigned into a RangeIndex frame,
+       so fuel_available / event_active / ppa_active become NaN when any window is set.
+"""
+from __future__ import annotations
+
 import os
-import json
-import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
 
-CONFIG_PATH = "config.json"
+import numpy as np
+import pandas as pd
+
+from gensim.config import Paths
+
 LOOKBACK_DAYS = 45
 LOOKAHEAD_DAYS = 14
 
-SITE_LOAD_FILE     = "site_load.csv"        # optional: timestamp,load_mw
-AVOIDED_COST_FILE  = "avoided_cost.csv"     # optional: timestamp,price_mwh
-CURTAILMENTS_FILE  = "fuel_curtailments.csv"# optional: start,end,note
-EVENTS_FILE        = "dr_events.csv"        # optional: start,end,note
-
-def load_config(path=CONFIG_PATH):
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            return json.load(f)
-    return {}
 
 def _min_step_seconds(ts):
     ser = pd.to_datetime(ts).sort_values().dropna()
@@ -25,8 +26,10 @@ def _min_step_seconds(ts):
     diffs = diffs[diffs > 0]
     return float(diffs.min()) if not diffs.empty else float("inf")
 
+
 def _target_freq(steps):
     return "15min" if any(s < 3600 for s in steps if s != float("inf")) else "h"
+
 
 def _flag_windows(index_ts, windows):
     if not windows:
@@ -35,15 +38,16 @@ def _flag_windows(index_ts, windows):
     for w in windows:
         try:
             s = pd.to_datetime(w.get("start")); e = pd.to_datetime(w.get("end"))
-            if pd.isna(s) or pd.isna(e): 
+            if pd.isna(s) or pd.isna(e):
                 continue
             mask |= ((index_ts >= s) & (index_ts < e)).astype(int)
         except Exception:
             continue
     return mask
 
+
 def _load_windows_csv(path):
-    if not os.path.exists(path): 
+    if not os.path.exists(path):
         return []
     try:
         df = pd.read_csv(path)
@@ -54,40 +58,36 @@ def _load_windows_csv(path):
     except Exception:
         return []
 
+
 def _resample_ffill(df, freq):
     if df is None or df.empty:
         return None
     df = df.sort_values("timestamp").set_index("timestamp").resample(freq).ffill()
     return df.reset_index()
 
-def merge_inputs(
-    demand_file="duke_demand.csv",
-    gas_file="henry_hub_daily.csv",
-    weather_file="merged_weather.csv",
-    price_file="market_price.csv",
-    output_file="merged_inputs.csv"
-):
-    cfg = load_config()
+
+def _load_csv(fname, parse_dates):
+    if not os.path.exists(fname):
+        return None
+    try:
+        return pd.read_csv(fname, parse_dates=parse_dates).dropna()
+    except Exception:
+        return None
+
+
+def merge_inputs(cfg: dict, paths: Paths, now: datetime | None = None) -> pd.DataFrame:
+    """Merge demand, gas, weather and prices into paths.merged_inputs. `now` is injectable for tests."""
     ops = cfg.get("operations", {})
     gas_basis = float(cfg.get("gas", {}).get("basis_adder_per_mmbtu", 0.0))
 
-    now = datetime.now()
+    now = now if now is not None else datetime.now()
     window_start = now - timedelta(days=LOOKBACK_DAYS)
-    window_end   = now + timedelta(days=LOOKAHEAD_DAYS)
+    window_end = now + timedelta(days=LOOKAHEAD_DAYS)
 
-    # Load core inputs
-    def load_csv(fname, parse_dates):
-        if not os.path.exists(fname): 
-            return None
-        try:
-            return pd.read_csv(fname, parse_dates=parse_dates).dropna()
-        except Exception:
-            return None
-
-    demand  = load_csv(demand_file, ["timestamp"])
-    weather = load_csv(weather_file, ["timestamp"])
-    prices  = load_csv(price_file, ["timestamp"])
-    gas     = load_csv(gas_file, ["date"])
+    demand = _load_csv(paths.demand, ["timestamp"])
+    weather = _load_csv(paths.merged_weather, ["timestamp"])
+    prices = _load_csv(paths.market_price, ["timestamp"])
+    gas = _load_csv(paths.gas, ["date"])
 
     if demand is not None and "value" in demand.columns:
         demand = demand.rename(columns={"value": "demand_mw"})
@@ -128,38 +128,38 @@ def merge_inputs(
     # Demand, Price, Weather
     if demand is not None and not demand.empty:
         d = _resample_ffill(demand, freq)
-        merged = merged.merge(d[["timestamp","demand_mw"]], on="timestamp", how="left")
+        merged = merged.merge(d[["timestamp", "demand_mw"]], on="timestamp", how="left")
     else:
         merged["demand_mw"] = merged.get("demand_mw", np.nan)
 
     if prices is not None and not prices.empty:
         p = _resample_ffill(prices, freq)
-        merged = merged.merge(p[["timestamp","price_mwh"]], on="timestamp", how="left")
+        merged = merged.merge(p[["timestamp", "price_mwh"]], on="timestamp", how="left")
     else:
         merged["price_mwh"] = merged.get("price_mwh", np.nan)
 
     if weather is not None and not weather.empty:
         w = _resample_ffill(weather, freq)
-        cols = [c for c in ["temp_f","condition","windSpeed","temperatureUnit"] if c in w.columns]
+        cols = [c for c in ["temp_f", "condition", "windSpeed", "temperatureUnit"] if c in w.columns]
         if cols:
-            merged = merged.merge(w[["timestamp"]+cols], on="timestamp", how="left")
+            merged = merged.merge(w[["timestamp"] + cols], on="timestamp", how="left")
 
     # Optional series
-    site_load = load_csv(SITE_LOAD_FILE, ["timestamp"])
+    site_load = _load_csv(paths.site_load, ["timestamp"])
     if site_load is not None and not site_load.empty:
         if "load_mw" in site_load.columns:
-            site_load = site_load.rename(columns={"load_mw":"site_load_mw"})
+            site_load = site_load.rename(columns={"load_mw": "site_load_mw"})
         sl = _resample_ffill(site_load, freq)
-        merged = merged.merge(sl[["timestamp","site_load_mw"]], on="timestamp", how="left")
+        merged = merged.merge(sl[["timestamp", "site_load_mw"]], on="timestamp", how="left")
     else:
         merged["site_load_mw"] = merged.get("site_load_mw", np.nan)
 
-    avoided = load_csv(AVOIDED_COST_FILE, ["timestamp"])
+    avoided = _load_csv(paths.avoided_cost, ["timestamp"])
     if avoided is not None and not avoided.empty:
         if "price_mwh" in avoided.columns:
-            avoided = avoided.rename(columns={"price_mwh":"avoided_cost_mwh"})
+            avoided = avoided.rename(columns={"price_mwh": "avoided_cost_mwh"})
         ac = _resample_ffill(avoided, freq)
-        merged = merged.merge(ac[["timestamp","avoided_cost_mwh"]], on="timestamp", how="left")
+        merged = merged.merge(ac[["timestamp", "avoided_cost_mwh"]], on="timestamp", how="left")
 
     # Robust fill for avoided_cost_mwh — always operate on a Series
     fixed_ac = float(ops.get("avoided_cost_fixed_per_mwh", 65.0))
@@ -170,9 +170,9 @@ def merge_inputs(
         merged["avoided_cost_mwh"] = fixed_ac
 
     # Constraint windows from config + CSVs
-    fuel_windows = ops.get("fuel_curtailment_windows", []) + _load_windows_csv(CURTAILMENTS_FILE)
-    dr_windows   = ops.get("dr_event_windows", []) + _load_windows_csv(EVENTS_FILE)
-    ppa_windows  = ops.get("ppa_windows", [])
+    fuel_windows = ops.get("fuel_curtailment_windows", []) + _load_windows_csv(paths.fuel_curtailments)
+    dr_windows = ops.get("dr_event_windows", []) + _load_windows_csv(paths.dr_events)
+    ppa_windows = ops.get("ppa_windows", [])
 
     idx = pd.to_datetime(merged["timestamp"])
 
@@ -198,11 +198,9 @@ def merge_inputs(
     if ppa_windows:
         merged["ppa_active"] = _flag_windows(idx, ppa_windows)
     else:
-        merged["ppa_active"] = 1 if ops.get("program_mode","WHOLESALE") in ("PURPA","NET_METERING") else 0
+        merged["ppa_active"] = 1 if ops.get("program_mode", "WHOLESALE") in ("PURPA", "NET_METERING") else 0
 
     merged = merged.sort_values("timestamp").drop_duplicates(subset=["timestamp"])
-    merged.to_csv(output_file, index=False)
-    print(f"✅ Saved {output_file} with {len(merged)} rows • freq={freq}")
-
-if __name__ == "__main__":
-    merge_inputs()
+    merged.to_csv(paths.merged_inputs, index=False)
+    print(f"✅ Saved {paths.merged_inputs.name} with {len(merged)} rows • freq={freq}")
+    return merged

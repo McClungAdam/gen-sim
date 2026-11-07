@@ -21,6 +21,12 @@ Running log of assumptions, judgment calls and unverified facts. Each entry: wha
   mechanical pandas-3 shim (`fillna(method=)`→`ffill/bfill`, `"H"`→`"h"`,
   `is_datetime64tz_dtype`→`isinstance(..., DatetimeTZDtype)`) reproduces them exactly under
   pandas 3.1.1. See `tests/golden/README.md`.
+- The legacy merge window is relative to the clock (now − 45 days … now + 14 days). Stale cached
+  data therefore merges to **0 rows**, and the simulator then fails with an unrelated `.dt` error.
+  To be made a clear error under defect #6. `run_pipeline.py --as-of` sets "now" explicitly.
+- Fetch steps keep the legacy tolerance (one failing source doesn't stop the others; its cached
+  file is used) but every failure is now reported. Printed request errors have `api_key=` redacted
+  (requests' HTTPError messages embed the full URL).
 
 ## Secrets
 

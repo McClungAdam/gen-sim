@@ -1,17 +1,25 @@
 import streamlit as st
 import pandas as pd
-import subprocess
 import os
 import json
 import plotly.express as px
 from datetime import datetime
 
+from gensim import pipeline
+from gensim.config import DEFAULT_CONFIG, DEFAULT_WORKDIR, Paths
+
 st.set_page_config(layout="wide")
 st.title("🔌 Generator Dispatch Simulator Dashboard")
 
-CONFIG_PATH   = "config.json"
-RESULTS_PATH  = "simulation_results.csv"
-MERGED_INPUTS = "merged_inputs.csv"
+CONFIG_PATH   = DEFAULT_CONFIG
+PATHS         = Paths(DEFAULT_WORKDIR).ensure()
+RESULTS_PATH  = PATHS.simulation_results
+MERGED_INPUTS = PATHS.merged_inputs
+
+
+def _report_fetch_errors(errors):
+    for step, msg in (errors or {}).items():
+        st.warning(f"Fetch step '{step}' failed (cached data used): {msg}")
 
 # ---------- Helpers ----------
 def latest_from_csv(path, ts_col_candidates):
@@ -56,14 +64,14 @@ if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r") as f:
         CONFIG = json.load(f)
 else:
-    st.error("config.json not found.")
+    st.error(f"Config not found: {CONFIG_PATH}")
     st.stop()
 
 # ---------- Load results ----------
 if os.path.exists(RESULTS_PATH):
     df = pd.read_csv(RESULTS_PATH, parse_dates=["timestamp"])
 else:
-    st.warning("simulation_results.csv not found. Run a simulation to populate charts.")
+    st.warning(f"{RESULTS_PATH.name} not found. Run a simulation to populate charts.")
     df = pd.DataFrame(columns=["timestamp"])
 
 # Detect generator names from results (fallback to config)
@@ -84,7 +92,7 @@ def has_price_series():
 
 # Last updated
 try:
-    with open("last_updated.txt", "r") as f:
+    with open(PATHS.last_updated, "r") as f:
         st.caption(f"🕒 Last Updated: {f.read()}")
 except FileNotFoundError:
     st.caption("🕒 Last Updated: Unknown")
@@ -122,8 +130,10 @@ with col_market1:
 
 with col_market2:
     if st.button("📈 Fetch Market Prices Now"):
-        subprocess.run(["python", "get_market_prices.py"])
-        st.success("Fetched market_price.csv (see Diagnostics below).")
+        _errs = pipeline.fetch(json.load(open(CONFIG_PATH, encoding="utf-8")), PATHS, only=["market_prices"])
+        _report_fetch_errors(_errs)
+        if not _errs:
+            st.success("Fetched market_price.csv (see Diagnostics below).")
 
 # =============================
 # Controls
@@ -134,20 +144,12 @@ c1, c2 = st.columns([1, 1])
 with c1:
     if st.button("🔁 Refresh All Data (Demand + Gas + Weather + Prices → Merge → Simulate)"):
         st.write("Fetching and updating data...")
-        subprocess.run(["python", "get_demand.py"])
-        subprocess.run(["python", "get_gas_prices.py"])
-        subprocess.run(["python", "get_weather_observed.py"])
-        subprocess.run(["python", "get_weather_forecast.py"])
-        subprocess.run(["python", "merge_weather_inputs.py"])
-        subprocess.run(["python", "get_market_prices.py"])   # <-- important for price_mwh
-        subprocess.run(["python", "merge_inputs.py"])
-        subprocess.run(["python", "simulate_generator.py"])
-        import time; time.sleep(1)
+        _res = pipeline.run(CONFIG_PATH, PATHS.workdir)
+        _report_fetch_errors(_res["fetch_errors"])
         st.rerun()
 with c2:
     if st.button("▶️ Run Simulation Only"):
-        subprocess.run(["python", "simulate_generator.py"])
-        import time; time.sleep(1)
+        pipeline.run(CONFIG_PATH, PATHS.workdir, do_fetch=False, do_merge=False)
         st.rerun()
 
 # =============================
@@ -155,14 +157,14 @@ with c2:
 # =============================
 st.header("🧪 Data Diagnostics (latest available rows)")
 diag = pd.DataFrame([
-    {"file": "duke_demand.csv",        "latest": latest_from_csv("duke_demand.csv",        ["timestamp"])},
-    {"file": "henry_hub_daily.csv",    "latest": latest_from_csv("henry_hub_daily.csv",    ["date"])},
-    {"file": "weather_observed.csv",   "latest": latest_from_csv("weather_observed.csv",   ["timestamp"])},
-    {"file": "weather_forecast.csv",   "latest": latest_from_csv("weather_forecast.csv",   ["timestamp"])},
-    {"file": "merged_weather.csv",     "latest": latest_from_csv("merged_weather.csv",     ["timestamp"])},
-    {"file": "market_price.csv",       "latest": latest_from_csv("market_price.csv",       ["timestamp"])},
-    {"file": "merged_inputs.csv",      "latest": latest_from_csv("merged_inputs.csv",      ["timestamp"])},
-    {"file": "simulation_results.csv", "latest": latest_from_csv("simulation_results.csv", ["timestamp"])},
+    {"file": "duke_demand.csv",        "latest": latest_from_csv(PATHS.workdir / "duke_demand.csv",        ["timestamp"])},
+    {"file": "henry_hub_daily.csv",    "latest": latest_from_csv(PATHS.workdir / "henry_hub_daily.csv",    ["date"])},
+    {"file": "weather_observed.csv",   "latest": latest_from_csv(PATHS.workdir / "weather_observed.csv",   ["timestamp"])},
+    {"file": "weather_forecast.csv",   "latest": latest_from_csv(PATHS.workdir / "weather_forecast.csv",   ["timestamp"])},
+    {"file": "merged_weather.csv",     "latest": latest_from_csv(PATHS.workdir / "merged_weather.csv",     ["timestamp"])},
+    {"file": "market_price.csv",       "latest": latest_from_csv(PATHS.workdir / "market_price.csv",       ["timestamp"])},
+    {"file": "merged_inputs.csv",      "latest": latest_from_csv(PATHS.workdir / "merged_inputs.csv",      ["timestamp"])},
+    {"file": "simulation_results.csv", "latest": latest_from_csv(PATHS.workdir / "simulation_results.csv", ["timestamp"])},
 ])
 st.dataframe(diag, use_container_width=True)
 
@@ -233,7 +235,7 @@ for gi, gen in enumerate(CONFIG.get("generators", [])):
                 except Exception as e:
                     st.error(f"Failed to save config: {e}")
                 if st.checkbox(f"Run simulation now for {name.upper()}"):
-                    subprocess.run(["python", "simulate_generator.py"])
+                    pipeline.run(CONFIG_PATH, PATHS.workdir, do_fetch=False, do_merge=False)
                     st.success("Simulation complete. Click 'Run Simulation Only' to refresh charts.")
                     st.stop()
 

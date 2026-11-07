@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gensim"
+version = "0.2.0"
+description = "Merchant asset screen for small generating plants (PJM)"
+readme = "README.md"
+requires-python = ">=3.12"
+# Exact pins live in requirements.txt; these are the compatible ranges.
+dependencies = [
+  "numpy>=2.0",
+  "pandas>=2.2",
+  "plotly>=6.0",
+  "python-dotenv>=1.0",
+  "PyYAML>=6.0",
+  "requests>=2.31",
+  "streamlit>=1.40",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+include = ["gensim*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+addopts = "-p no:cacheprovider"

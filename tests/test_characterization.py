@@ -14,7 +14,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from legacy_runner import run_normalize_prices, run_scenario
+from pipeline_runner import run_normalize_prices, run_scenario
 
 GOLDEN = Path(__file__).parent / "golden"
 UPDATE = os.getenv("GENSIM_UPDATE_GOLDEN") == "1"
