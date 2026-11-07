@@ -8,6 +8,7 @@ from datetime import datetime
 from gensim import pipeline
 from gensim.config import DEFAULT_CONFIG, DEFAULT_WORKDIR, Paths
 from gensim.timeutil import market_tz
+from gensim.windows import parse_windows_text as parse_windows, serialize_windows_text as serialize_windows
 
 st.set_page_config(layout="wide")
 st.title("🔌 Generator Dispatch Simulator Dashboard")
@@ -44,21 +45,6 @@ def latest_from_csv(path, ts_col_candidates):
         return "⚠️ no known timestamp columns"
     except Exception as e:
         return f"❌ read error: {e}"
-
-def parse_windows(text):
-    """Lines of 'start,end,reason' -> list of dicts."""
-    wins = []
-    for line in (text or "").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        parts = [p.strip() for p in line.split(",")]
-        if len(parts) >= 2:
-            wins.append({"start": parts[0], "end": parts[1], "reason": parts[2] if len(parts) > 2 else ""})
-    return wins
-
-def serialize_windows(wins):
-    return "\n".join(f"{w.get('start','')},{w.get('end','')},{w.get('reason','')}" for w in (wins or []))
 
 # ---------- Load config ----------
 if os.path.exists(CONFIG_PATH):
@@ -118,11 +104,11 @@ ba = st.selectbox("Balancing Authority (BA)", ba_options, index=ba_options.index
 
 series_options = ["DA", "RT"]
 current_series = market.get("price_series", "DA")
-price_series = st.selectbox("Price Series", series_options, index=ba_options.index(ba) if current_series not in series_options else series_options.index(current_series))
+price_series = st.selectbox("Price Series", series_options, index=series_options.index(current_series) if current_series in series_options else 0)
 
-basis = st.number_input("Gas Basis Adder ($/MMBtu)", min_value=0.0, max_value=10.0,
+basis = st.number_input("Gas Basis Adder ($/MMBtu)", min_value=-10.0, max_value=10.0,
                         value=float(gas_cfg.get("basis_adder_per_mmbtu", 0.0)), step=0.05,
-                        help="Adds to Henry Hub to form gas_price_effective.")
+                        help="Added to Henry Hub to form gas_price_effective. Negative for hubs that trade below Henry Hub (e.g. Appalachian).")
 
 col_market1, col_market2 = st.columns([1,1])
 with col_market1:
@@ -213,6 +199,7 @@ for gi, gen in enumerate(CONFIG.get("generators", [])):
             st.markdown("**Maintenance windows** — one per line: `start,end,reason` (ISO or natural language accepted by pandas)")
             win_text = st.text_area("Windows", value=serialize_windows(gen.get("maintenance_windows", [])), height=120)
 
+            run_after_save = st.checkbox(f"Run simulation after saving {name.upper()}", key=f"{name}_run_after_save")
             saved = st.form_submit_button(f"💾 Save {name.upper()} Settings")
             if saved:
                 gen["name"] = name
@@ -239,10 +226,12 @@ for gi, gen in enumerate(CONFIG.get("generators", [])):
                     st.success(f"Saved settings for {name.upper()}.")
                 except Exception as e:
                     st.error(f"Failed to save config: {e}")
-                if st.checkbox(f"Run simulation now for {name.upper()}"):
-                    pipeline.run(CONFIG_PATH, PATHS.workdir, do_fetch=False, do_merge=False)
-                    st.success("Simulation complete. Click 'Run Simulation Only' to refresh charts.")
-                    st.stop()
+                if run_after_save:
+                    try:
+                        pipeline.run(CONFIG_PATH, PATHS.workdir, do_fetch=False, do_merge=False)
+                        st.success("Simulation complete. Click 'Run Simulation Only' to refresh charts.")
+                    except Exception as e:
+                        st.error(f"Simulation failed: {e}")
 
 # =============================
 # Config Preview (read-only)
@@ -305,7 +294,8 @@ if not df.empty and gen_names:
             # Use dt_hours for runtime and weighted average when present
             if "dt_hours" in dfg.columns:
                 ytd_runtime = (dfg[run_col].astype(float) * dfg["dt_hours"]).sum()
-                ytd_avg_output = (dfg[out_col] * dfg["dt_hours"]).sum() / dfg["dt_hours"].sum()
+                _hrs = dfg["dt_hours"].sum()
+                ytd_avg_output = (dfg[out_col] * dfg["dt_hours"]).sum() / _hrs if _hrs > 0 else 0.0
             else:
                 ytd_runtime = dfg[run_col].sum()
                 ytd_avg_output = dfg[out_col].mean()

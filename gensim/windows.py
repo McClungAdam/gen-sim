@@ -22,3 +22,21 @@ def flag_windows(ts: pd.Series, windows, assume_tz: str) -> pd.Series:
         except Exception:
             continue
     return mask
+
+
+def parse_windows_text(text: str) -> list[dict]:
+    """Dashboard text area: one window per line, 'start,end,reason' -> list of dicts."""
+    wins = []
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = [p.strip() for p in line.split(",", 2)]   # reason may itself contain commas
+        if len(parts) >= 2:
+            wins.append({"start": parts[0], "end": parts[1], "reason": parts[2] if len(parts) > 2 else ""})
+    return wins
+
+
+def serialize_windows_text(wins) -> str:
+    """Inverse of parse_windows_text: a real newline between windows (defect 9a guard)."""
+    return "\n".join(f"{w.get('start','')},{w.get('end','')},{w.get('reason','')}" for w in (wins or []))
