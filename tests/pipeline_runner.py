@@ -28,7 +28,7 @@ INPUT_CSVS = [
     "weather_observed.csv",
     "weather_forecast.csv",
 ]
-RAW_PRICE_CASES = ["normal", "large"]
+RAW_PRICE_CASES = ["normal"]  # "large" (demand-like) must now raise: tests/test_market_prices.py
 
 # "Now" for the frozen clock: just after the fixture window ends (naive local, as the legacy
 # merge used datetime.now()); merge_weather compares against tz-aware UTC.

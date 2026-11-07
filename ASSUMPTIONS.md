@@ -27,6 +27,13 @@ Running log of assumptions, judgment calls and unverified facts. Each entry: wha
 - Fetch steps keep the legacy tolerance (one failing source doesn't stop the others; its cached
   file is used) but every failure is now reported. Printed request errors have `api_key=` redacted
   (requests' HTTPError messages embed the full URL).
+- **Defect #2 verified (2026-11-06, with key):** EIA v2 `electricity/` has exactly six child routes
+  (retail-sales, electric-power-operational-data, rto, state-electricity-profiles,
+  operating-generator-capacity, facility-fuel); `electricity/wholesale-prices` returns 404.
+  `facility-fuel` has monthly data 2001-01 → 2026-08 (calibration source).
+- **Price inputs after the #1/#2 fix:** no EIA price fetch at all. PJM LMPs from Data Miner 2 (pending);
+  DUK revenue only via explicit avoided cost; any other series via a user CSV (`GENSIM_PRICE_FILE`).
+  Series with median > $1,000/MWh are rejected as "looks like MW", never rescaled.
 
 ## Secrets
 
