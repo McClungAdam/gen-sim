@@ -111,6 +111,10 @@ Running log of assumptions, judgment calls and unverified facts. Each entry: wha
 - **Exclusion rules are written before fitting and applied mechanically:** see
   `docs/calibration_protocol.md` (R1 Helene, R2 missing data, R3 above nameplate, R4 actual < 50% of
   the *prior-parameter* model at normal flow). Committed before the first fit.
+- **EIA-923 monthly values 2001–2016 are imputed** (fractional MWh; EIA allocation of an annual
+  filer's total). Fries reports monthly from 2017 (`Respondent Frequency = M` in 2020). Monthly
+  tests against 2001–2016 are not meaningful. See `docs/calibration_v1_results.md`.
+  **Status: protocol v2 decision pending (Adam).**
 - **Holdout:** calibrate 2003–2012, validate 2013–2023 (minus excluded months). Report every year.
 
 ## Toolchain
