@@ -1,7 +1,7 @@
 """Defect #10: window flags must align with the merged frame (legacy produced all-NaN flags)."""
 import pandas as pd
 
-from gensim.merge import _flag_windows
+from gensim.windows import flag_windows as _flag_windows
 
 
 def test_flags_align_with_rangeindex_frame():

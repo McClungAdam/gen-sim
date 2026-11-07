@@ -2,8 +2,11 @@
 
 Heat rate is config Btu/kWh; converted once via gensim.units (defect #7).
 
-KNOWN DEFECTS (fixed in follow-up commits, pinned by tests/golden):
-  #8  maintenance_windows are stored in config but never applied.
+Dispatch rules (defect #8):
+  * runs only when margin > min_margin_threshold (strict) and all hard gates allow it;
+  * hard gates (permit, fuel availability, program/PPA window, generator maintenance windows)
+    force the unit off immediately, overriding min-up; min up/down apply to economic decisions;
+  * output is capped at capacity x availability_cap and by export/site limits.
 """
 from __future__ import annotations
 
@@ -14,6 +17,7 @@ import pandas as pd
 
 from gensim.config import Paths
 from gensim.units import fuel_cost_per_mwh
+from gensim.windows import flag_windows
 
 
 def _safe_gate(df, col, default=0):
@@ -104,27 +108,32 @@ def simulate(cfg: dict, paths: Paths, now: datetime | None = None) -> pd.DataFra
         hours_since_change = 1e9
         min_up = int(gen.get("min_up_hours", 0))
         min_down = int(gen.get("min_down_hours", 0))
+        in_maintenance = flag_windows(df["timestamp"], gen.get("maintenance_windows", [])).astype(bool)
 
         for i in range(len(df)):
-            econ = float(margin.iloc[i]) >= threshold
-            ok   = bool(allowed.iloc[i])
-            want_on = econ and ok
+            econ = float(margin.iloc[i]) > threshold
+            hard_ok = bool(allowed.iloc[i]) and not bool(in_maintenance.iloc[i])
 
             dt_h = float(df.at[i,"dt_hours"])
 
             decision_on = on_state
-            if on_state:
-                if not want_on and hours_since_change >= max(min_up,0):
+            if not hard_ok:
+                decision_on = False                      # forced off; overrides min-up
+            elif on_state:
+                if not econ and hours_since_change >= max(min_up,0):
                     decision_on = False
             else:
-                if want_on and hours_since_change >= max(min_down,0):
+                if econ and hours_since_change >= max(min_down,0):
                     decision_on = True
 
             target_cap = float(max_cap.iloc[i]) if decision_on else 0.0
-            delta = target_cap - current_output
-            max_step = ramp_rate_mw_per_hr * dt_h
-            change = max(-max_step, min(max_step, delta))
-            output = max(0.0, min(target_cap, current_output + change))
+            if not hard_ok:
+                output = 0.0                             # outage/curtailment: no ramp-down tail
+            else:
+                delta = target_cap - current_output
+                max_step = ramp_rate_mw_per_hr * dt_h
+                change = max(-max_step, min(max_step, delta))
+                output = max(0.0, min(target_cap, current_output + change))
 
             started = (not on_state) and decision_on
             df.at[i, out_col] = output

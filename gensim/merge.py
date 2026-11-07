@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from gensim.config import Paths
+from gensim.windows import flag_windows as _flag_windows
 
 LOOKBACK_DAYS = 45
 LOOKAHEAD_DAYS = 14
@@ -27,22 +28,6 @@ def _min_step_seconds(ts):
 
 def _target_freq(steps):
     return "15min" if any(s < 3600 for s in steps if s != float("inf")) else "h"
-
-
-def _flag_windows(ts: pd.Series, windows) -> pd.Series:
-    """1 where ts falls in any [start, end) window, else 0. Aligned to ts.index (defect #10:
-    the legacy version indexed the mask by the timestamps themselves, so assigning it into the
-    RangeIndex frame produced all-NaN flags)."""
-    mask = pd.Series(0, index=ts.index, dtype=int)
-    for w in windows or []:
-        try:
-            s = pd.to_datetime(w.get("start")); e = pd.to_datetime(w.get("end"))
-            if pd.isna(s) or pd.isna(e):
-                continue
-            mask |= ((ts >= s) & (ts < e)).astype(int)
-        except Exception:
-            continue
-    return mask
 
 
 def _load_windows_csv(path):
