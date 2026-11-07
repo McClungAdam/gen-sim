@@ -1,6 +1,6 @@
 """Gas genset dispatch simulation. Ported from legacy simulate_generator.py; behavior unchanged.
 
-Heat rate is config Btu/kWh; fuel cost $/MWh = heat_rate * gas($/MMBtu) / 1000.
+Heat rate is config Btu/kWh; converted once via gensim.units (defect #7).
 
 KNOWN DEFECTS (fixed in follow-up commits, pinned by tests/golden):
   #8  maintenance_windows are stored in config but never applied.
@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from gensim.config import Paths
+from gensim.units import fuel_cost_per_mwh
 
 
 def _safe_gate(df, col, default=0):
@@ -76,7 +77,7 @@ def simulate(cfg: dict, paths: Paths, now: datetime | None = None) -> pd.DataFra
         eff_cap = max(0.0, min(capacity*avail, capacity))
 
         gas_col = "gas_price_effective" if "gas_price_effective" in df.columns else "gas_price"
-        fuel_cost = heat_rate * pd.to_numeric(df[gas_col], errors="coerce").ffill().bfill().fillna(0.0) / 1000.0
+        fuel_cost = fuel_cost_per_mwh(heat_rate, pd.to_numeric(df[gas_col], errors="coerce").ffill().bfill().fillna(0.0))
         margin = (revenue_series.ffill().bfill() - fuel_cost - vom).fillna(-1e9)
 
         # Max dispatch based on export/site limits
