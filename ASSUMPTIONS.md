@@ -22,8 +22,13 @@ Running log of assumptions, judgment calls and unverified facts. Each entry: wha
   `is_datetime64tz_dtype`→`isinstance(..., DatetimeTZDtype)`) reproduces them exactly under
   pandas 3.1.1. See `tests/golden/README.md`.
 - The legacy merge window is relative to the clock (now − 45 days … now + 14 days). Stale cached
-  data therefore merges to **0 rows**, and the simulator then fails with an unrelated `.dt` error.
-  To be made a clear error under defect #6. `run_pipeline.py --as-of` sets "now" explicitly.
+  data used to merge to 0 rows and crash the simulator; it now raises `MissingInput` ("No data
+  overlaps the merge window"). `run_pipeline.py --as-of` sets "now" explicitly.
+- **Column standard (defect #6):** Original's names are the standard (`demand_mw`, `price_mwh`,
+  `gas_price`, `temp_f`/`condition`/`windSpeed`); Historical's `dry_bulb_c`/`wet_bulb_c`/`wind_mps`
+  were never produced by any fetcher and are dropped. Required inputs: prices for WHOLESALE (and DR
+  without a fixed DR rate); gas whenever gas units are configured. Demand and weather are optional
+  and only informational.
 - Fetch steps keep the legacy tolerance (one failing source doesn't stop the others; its cached
   file is used) but every failure is now reported. Printed request errors have `api_key=` redacted
   (requests' HTTPError messages embed the full URL).

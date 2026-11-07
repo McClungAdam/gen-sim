@@ -7,6 +7,9 @@ Timestamps: tz-aware UTC throughout (gensim.timeutil). Source rules:
   site_load / avoided_cost   user files: naive = market time
   config/CSV windows, `now`  human input: naive = market time
 
+Inputs (defect #6): every source has standard column names (SCHEMAS); legacy names are mapped
+explicitly, missing required columns/files raise MissingInput, nothing is silently dropped.
+
 Gas (defect #5): each daily print covers its whole local day and carries over non-trading days
 (weekends/holidays) up to GAS_MAX_CARRY; beyond that the hour is left NaN and the simulator refuses
 to run rather than inventing a fuel price.
@@ -71,19 +74,50 @@ def _gas_on_timeline(gas: pd.DataFrame, timeline_ts: pd.Series) -> pd.Series:
     return pd.Series(price.reindex(pd.DatetimeIndex(timeline_ts)).to_numpy(), index=timeline_ts.index)
 
 
-def _load_csv(fname, ts_col="timestamp", assume_tz=None, as_day_start_tz=None):
-    """Read a cached/user CSV and convert `ts_col` to tz-aware UTC (see module docstring)."""
-    if not os.path.exists(fname):
+class MissingInput(ValueError):
+    """A required input file, column or overlapping time range is missing (defect #6)."""
+
+
+# Standard column names per source. Aliases map legacy fetcher output to the standard names.
+SCHEMAS = {
+    "demand":       {"required": ["timestamp", "demand_mw"], "aliases": {"value": "demand_mw"}},
+    "weather":      {"required": ["timestamp", "temp_f"], "aliases": {}},
+    "prices":       {"required": ["timestamp", "price_mwh"], "aliases": {"value": "price_mwh", "price": "price_mwh"}},
+    "gas":          {"required": ["date", "gas_price"], "aliases": {"price": "gas_price"}},
+    "site_load":    {"required": ["timestamp", "site_load_mw"], "aliases": {"load_mw": "site_load_mw"}},
+    "avoided_cost": {"required": ["timestamp", "avoided_cost_mwh"], "aliases": {"price_mwh": "avoided_cost_mwh"}},
+}
+
+
+def _load_source(name, path, *, required, assume_tz=None, as_day_start_tz=None, announce_missing=True):
+    """Read one input CSV, standardize column names, convert time to tz-aware UTC.
+
+    Missing file: None (or MissingInput if required). Unreadable file, missing required columns,
+    or no usable rows when required: MissingInput. Only rows missing a *required* value are dropped.
+    """
+    if not os.path.exists(path):
+        if required:
+            raise MissingInput(f"{name}: required input {path} not found.")
+        if announce_missing:
+            print(f"ℹ️ {name}: {path.name} not found; its columns will be empty.")
         return None
+    schema = SCHEMAS[name]
     try:
-        df = pd.read_csv(fname).dropna()
-    except Exception:
-        return None
-    if ts_col in df.columns:
-        if as_day_start_tz:
-            df[ts_col] = dates_to_utc_day_start(df[ts_col], as_day_start_tz)
-        else:
-            df[ts_col] = series_to_utc(df[ts_col], assume_tz)
+        df = pd.read_csv(path)
+    except Exception as e:
+        raise MissingInput(f"{name}: cannot read {path}: {e}") from e
+    df = df.rename(columns={a: s for a, s in schema["aliases"].items() if a in df.columns and s not in df.columns})
+    missing = [c for c in schema["required"] if c not in df.columns]
+    if missing:
+        raise MissingInput(f"{name}: {path.name} lacks required column(s) {missing}; found {list(df.columns)}.")
+    df = df.dropna(subset=schema["required"]).reset_index(drop=True)
+    ts_col = schema["required"][0]
+    if as_day_start_tz:
+        df[ts_col] = dates_to_utc_day_start(df[ts_col], as_day_start_tz)
+    else:
+        df[ts_col] = series_to_utc(df[ts_col], assume_tz)
+    if df.empty and required:
+        raise MissingInput(f"{name}: {path.name} has no usable rows.")
     return df
 
 
@@ -97,18 +131,16 @@ def merge_inputs(cfg: dict, paths: Paths, now: datetime | None = None) -> pd.Dat
     window_start = now - timedelta(days=LOOKBACK_DAYS)
     window_end = now + timedelta(days=LOOKAHEAD_DAYS)
 
-    demand = _load_csv(paths.demand, assume_tz="UTC")
-    weather = _load_csv(paths.merged_weather, assume_tz=None)
-    prices = _load_csv(paths.market_price, assume_tz=None)
-    gas = _load_csv(paths.gas, ts_col="date", as_day_start_tz=tz)
+    program_mode = ops.get("program_mode", "WHOLESALE")
+    need_prices = program_mode == "WHOLESALE" or (program_mode == "DR" and ops.get("dr_event_revenue_per_mwh") is None)
+    need_gas = bool(cfg.get("generators"))
 
-    if demand is not None and "value" in demand.columns:
-        demand = demand.rename(columns={"value": "demand_mw"})
-    if prices is not None:
-        if "value" in prices.columns: prices = prices.rename(columns={"value": "price_mwh"})
-        if "price" in prices.columns: prices = prices.rename(columns={"price": "price_mwh"})
+    demand = _load_source("demand", paths.demand, required=False, assume_tz="UTC")
+    weather = _load_source("weather", paths.merged_weather, required=False)
+    prices = _load_source("prices", paths.market_price, required=need_prices)
+    gas = _load_source("gas", paths.gas, required=need_gas, as_day_start_tz=tz)
     if gas is not None:
-        gas = gas.rename(columns={"date": "timestamp", "price": "gas_price"})
+        gas = gas.rename(columns={"date": "timestamp"})
 
     # Decide frequency
     steps = []
@@ -127,6 +159,11 @@ def merge_inputs(cfg: dict, paths: Paths, now: datetime | None = None) -> pd.Dat
         ts_min = pd.to_datetime(ts_min).ceil("15min")
         ts_max = pd.to_datetime(ts_max).floor("15min")
 
+    if ts_min > ts_max:
+        raise MissingInput(
+            f"No data overlaps the merge window {window_start} .. {window_end} (UTC) after intersecting "
+            "demand/weather/price coverage. Refresh the data or pass --as-of for a historical window."
+        )
     timeline = pd.DataFrame({"timestamp": pd.date_range(ts_min, ts_max, freq=freq)})
 
     # Gas -> every step of its local day (+ carry over non-trading days)
@@ -157,19 +194,15 @@ def merge_inputs(cfg: dict, paths: Paths, now: datetime | None = None) -> pd.Dat
             merged = merged.merge(w[["timestamp"] + cols], on="timestamp", how="left")
 
     # Optional series
-    site_load = _load_csv(paths.site_load, assume_tz=tz)
+    site_load = _load_source("site_load", paths.site_load, required=False, assume_tz=tz, announce_missing=False)
     if site_load is not None and not site_load.empty:
-        if "load_mw" in site_load.columns:
-            site_load = site_load.rename(columns={"load_mw": "site_load_mw"})
         sl = _resample_ffill(site_load, freq)
         merged = merged.merge(sl[["timestamp", "site_load_mw"]], on="timestamp", how="left")
     else:
         merged["site_load_mw"] = merged.get("site_load_mw", np.nan)
 
-    avoided = _load_csv(paths.avoided_cost, assume_tz=tz)
+    avoided = _load_source("avoided_cost", paths.avoided_cost, required=False, assume_tz=tz, announce_missing=False)
     if avoided is not None and not avoided.empty:
-        if "price_mwh" in avoided.columns:
-            avoided = avoided.rename(columns={"price_mwh": "avoided_cost_mwh"})
         ac = _resample_ffill(avoided, freq)
         merged = merged.merge(ac[["timestamp", "avoided_cost_mwh"]], on="timestamp", how="left")
 

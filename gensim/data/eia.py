@@ -37,7 +37,7 @@ def fetch_duk_demand(paths: Paths) -> pd.DataFrame:
 
     df = pd.DataFrame(data)
     df["timestamp"] = pd.to_datetime(df["period"], utc=True)  # EIA-930 hourly periods are UTC
-    df = df[["timestamp", "value"]].sort_values("timestamp")
+    df = df[["timestamp", "value"]].rename(columns={"value": "demand_mw"}).sort_values("timestamp")
 
     df.to_csv(paths.demand, index=False)
     print(f"✅ Saved {paths.demand.name} with {len(df)} rows from {df['timestamp'].min()} to {df['timestamp'].max()}")
@@ -60,11 +60,11 @@ def fetch_henry_hub(paths: Paths) -> pd.DataFrame | None:
     if "response" in j and "data" in j["response"]:
         new_df = pd.DataFrame(j["response"]["data"])
         cols = [c for c in ["period", "value"] if c in new_df.columns]
-        new_df = new_df[cols].rename(columns={"period": "date", "value": "price"})
+        new_df = new_df[cols].rename(columns={"period": "date", "value": "gas_price"})
         new_df["date"] = pd.to_datetime(new_df["date"])
 
         if os.path.exists(archive):
-            old_df = pd.read_csv(archive, parse_dates=["date"])
+            old_df = pd.read_csv(archive, parse_dates=["date"]).rename(columns={"price": "gas_price"})
             df = pd.concat([old_df, new_df], ignore_index=True)
         else:
             df = new_df
