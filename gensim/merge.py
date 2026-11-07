@@ -7,8 +7,9 @@ Timestamps: tz-aware UTC throughout (gensim.timeutil). Source rules:
   site_load / avoided_cost   user files: naive = market time
   config/CSV windows, `now`  human input: naive = market time
 
-KNOWN DEFECTS (fixed in follow-up commits, pinned by tests/golden):
-  #5   gas forward-fill stops at the last daily print.
+Gas (defect #5): each daily print covers its whole local day and carries over non-trading days
+(weekends/holidays) up to GAS_MAX_CARRY; beyond that the hour is left NaN and the simulator refuses
+to run rather than inventing a fuel price.
 """
 from __future__ import annotations
 
@@ -24,6 +25,7 @@ from gensim.windows import flag_windows as _flag_windows
 
 LOOKBACK_DAYS = 45
 LOOKAHEAD_DAYS = 14
+GAS_MAX_CARRY = timedelta(days=4)   # Friday print through a Monday holiday
 
 
 def _min_step_seconds(ts):
@@ -55,6 +57,18 @@ def _resample_ffill(df, freq):
         return None
     df = df.sort_values("timestamp").set_index("timestamp").resample(freq).ffill()
     return df.reset_index()
+
+
+def _gas_on_timeline(gas: pd.DataFrame, timeline_ts: pd.Series) -> pd.Series:
+    """Daily prints (timestamp = local day start, UTC) -> price for every timeline step."""
+    g = gas.dropna(subset=["timestamp"]).sort_values("timestamp").drop_duplicates("timestamp", keep="last")
+    g = g.set_index("timestamp")["gas_price"].astype(float)
+    grid = g.index.union(pd.DatetimeIndex(timeline_ts))
+    price = g.reindex(grid).ffill()
+    print_time = pd.Series(g.index, index=g.index).reindex(grid).ffill()
+    stale = (grid.to_series() - print_time) >= GAS_MAX_CARRY
+    price[stale.to_numpy()] = np.nan
+    return pd.Series(price.reindex(pd.DatetimeIndex(timeline_ts)).to_numpy(), index=timeline_ts.index)
 
 
 def _load_csv(fname, ts_col="timestamp", assume_tz=None, as_day_start_tz=None):
@@ -115,12 +129,11 @@ def merge_inputs(cfg: dict, paths: Paths, now: datetime | None = None) -> pd.Dat
 
     timeline = pd.DataFrame({"timestamp": pd.date_range(ts_min, ts_max, freq=freq)})
 
-    # Gas -> resample
-    if gas is not None:
-        gas = _resample_ffill(gas, freq)
-        merged = timeline.merge(gas, on="timestamp", how="left")
+    # Gas -> every step of its local day (+ carry over non-trading days)
+    merged = timeline.copy()
+    if gas is not None and not gas.empty:
+        merged["gas_price"] = _gas_on_timeline(gas, merged["timestamp"])
     else:
-        merged = timeline.copy()
         merged["gas_price"] = np.nan
     merged["gas_price_effective"] = pd.to_numeric(merged["gas_price"], errors="coerce") + gas_basis
 

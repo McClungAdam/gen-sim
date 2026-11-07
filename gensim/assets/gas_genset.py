@@ -84,7 +84,14 @@ def simulate(cfg: dict, paths: Paths, now: datetime | None = None) -> pd.DataFra
         eff_cap = max(0.0, min(capacity*avail, capacity))
 
         gas_col = "gas_price_effective" if "gas_price_effective" in df.columns else "gas_price"
-        fuel_cost = fuel_cost_per_mwh(heat_rate, pd.to_numeric(df[gas_col], errors="coerce").ffill().bfill().fillna(0.0))
+        gas = pd.to_numeric(df[gas_col], errors="coerce")
+        if gas.isna().any():
+            first = df.loc[gas.isna(), "timestamp"].iloc[0]
+            raise ValueError(
+                f"{name}: gas price missing for {int(gas.isna().sum())} of {len(gas)} steps (first {first}). "
+                "Refusing to back-fill or assume free fuel; refresh gas data or shorten the window."
+            )
+        fuel_cost = fuel_cost_per_mwh(heat_rate, gas)
         margin = (revenue_series.ffill().bfill() - fuel_cost - vom).fillna(-1e9)
 
         # Max dispatch based on export/site limits
