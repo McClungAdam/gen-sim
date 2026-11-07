@@ -59,3 +59,35 @@ def run(
     if do_simulate:
         result["simulation_results"] = simulate(cfg, paths, now=now)
     return result
+
+
+# ================================================================ merchant asset screen (Phase 1)
+ASSET_STAGES = ("fetch", "calibrate", "value")
+
+
+def run_asset(name: str = "fries", *, stages=ASSET_STAGES, refresh: bool = False,
+              workdir: Path | str = DEFAULT_WORKDIR) -> dict:
+    """fetch (USGS + EIA-923, cached) -> calibrate (docs/*.md + calibration_params.json) -> value."""
+    from gensim.calibration import report
+    from gensim.data import eia923, usgs
+    from gensim.valuation import scenarios
+
+    asset = scenarios.load_asset(name)
+    out = Path(workdir) / name
+    out.mkdir(parents=True, exist_ok=True)
+    result: dict = {"outputs": out}
+    flow = actual = None
+    if "fetch" in stages or "calibrate" in stages:
+        flow = usgs.daily_discharge(asset["hydro"]["usgs_site"], refresh=refresh and "fetch" in stages)
+        actual = eia923.monthly_generation(asset["ids"]["eia_plant"], refresh=refresh and "fetch" in stages)
+    if "calibrate" in stages:
+        report.write(report.build(flow, actual))
+        result["calibration"] = "docs/calibration_v2_results.md, docs/stepdown_diagnostic.md"
+    if "value" in stages:
+        g = scenarios.grid(asset)
+        base, t = scenarios.tornado(asset)
+        g.to_csv(out / "valuation_grid.csv", index=False)
+        t.to_csv(out / "tornado.csv", index=False)
+        result.update(grid=g, tornado=t, base_npv=base)
+        print(f"✅ {name}: valuation grid ({len(g)} cases) and tornado written to {out}; base max price {base:,.0f}")
+    return result
