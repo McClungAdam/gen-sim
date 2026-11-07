@@ -66,3 +66,22 @@ def test_r4_not_applied_outside_flow_band():
 def test_prior_constants_match_protocol():
     assert rules.GROSS_HEAD_FT == pytest.approx(39.77)
     assert rules.PRIOR.q_max_cfs == 2050 and rules.PRIOR.p_cap_mw == 5.0 and rules.DERATE_RATIO == 0.5
+
+
+def test_v2_annual_rules():
+    years = range(1930, 2025)
+    days = pd.date_range("1930-01-01", "2024-12-31", freq="D")
+    flow = pd.DataFrame({"date": days.strftime("%Y-%m-%d"), "q_cfs": 1500.0 + (days.year - 1930) * 2.0})
+    prior_2005 = rules.annual_table(flow, pd.DataFrame({"month": [f"2005-{m:02d}" for m in range(1, 13)], "net_generation_mwh": 1.0}))
+    pm = prior_2005["prior_model_mwh"].iloc[0]
+    rows = []
+    for y, val in [(2005, 0.9 * pm), (2006, 0.3 * pm), (2007, 99999.0), (2024, 0.9 * pm)]:
+        rows += [{"month": f"{y}-{m:02d}", "net_generation_mwh": val / 12} for m in range(1, 13)]
+    rows += [{"month": f"2008-{m:02d}", "net_generation_mwh": 1000.0} for m in range(1, 12)]   # 11 months only
+    t = rules.annual_table(flow, pd.DataFrame(rows)).set_index("year")
+    assert t.loc[2005, "exclude_reason"] == "" and t.loc[2005, "period"] == "calibrate"
+    assert t.loc[2006, "exclude_reason"].startswith("A4")
+    assert t.loc[2007, "exclude_reason"].startswith("A3")
+    assert t.loc[2008, "exclude_reason"].startswith("A2")
+    assert t.loc[2024, "exclude_reason"].startswith("A1")
+    assert rules.PRIOR_V2.availability == 1.0

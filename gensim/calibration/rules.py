@@ -59,3 +59,52 @@ def flagged_years(table: pd.DataFrame) -> pd.Series:
     """year -> '; '.join(distinct reasons) for years with any excluded month."""
     ex = table[table["excluded"]].assign(year=lambda d: d["month"].str[:4])
     return ex.groupby("year")["exclude_reason"].apply(lambda s: "; ".join(sorted({x.split(' ')[0] for x in s})))
+
+
+# ---------------------------------------------------------------- protocol v2 (annual)
+# docs/calibration_protocol_v2.md. Written before the v2 refit; thresholds carried over from v1.
+from dataclasses import replace as _replace  # noqa: E402
+
+PRIOR_V2 = _replace(PRIOR, availability=1.0)
+V2_KNOWN_OUTAGE_FROM_YEAR = 2024                 # A1
+V2_MAX_MISSING_FLOW_DAYS = 10                    # A2
+V2_CALIBRATE = (2003, 2012)
+V2_VALIDATE = (2013, 2018)
+V2_MONTHLY_CHECK = ("2017-01", "2018-12")
+V2_AS_OPERATED = (2019, 2023)
+
+
+def annual_table(flow: pd.DataFrame, actual: pd.DataFrame, prior: HydroParams = PRIOR_V2) -> pd.DataFrame:
+    """One row per calendar year with EIA data: actual, prior model, mean flow, A1-A4 reason, period."""
+    m = monthly_energy(flow, prior)
+    m["year"] = m["month"].str[:4].astype(int)
+    fy = m.groupby("year").agg(prior_model_mwh=("model_mwh", "sum"), missing_flow_days=("missing_days", "sum"))
+    d = flow.assign(year=flow["date"].str[:4].astype(int)).groupby("year")["q_cfs"].mean().rename("q_mean_cfs")
+    fy = fy.join(d)
+    ref = fy.loc[FLOW_BAND_YEARS[0]:FLOW_BAND_YEARS[1], "q_mean_cfs"]
+    q_lo, q_hi = ref.quantile(FLOW_BAND[0]), ref.quantile(FLOW_BAND[1])
+
+    a = actual.assign(year=actual["month"].str[:4].astype(int))
+    ay = a.groupby("year").agg(actual_mwh=("net_generation_mwh", lambda s: s.sum(min_count=1)),
+                               eia_months=("net_generation_mwh", "count")).join(fy, how="left").reset_index()
+    ay["hours"] = [8784 if pd.Timestamp(year=y, month=1, day=1).is_leap_year else 8760 for y in ay["year"]]
+
+    reasons = []
+    for r in ay.itertuples():
+        if r.year >= V2_KNOWN_OUTAGE_FROM_YEAR:
+            reasons.append("A1 known outage (Helene)")
+        elif r.eia_months < 12 or pd.isna(r.missing_flow_days) or r.missing_flow_days > V2_MAX_MISSING_FLOW_DAYS:
+            reasons.append("A2 incomplete data")
+        elif r.actual_mwh > NAMEPLATE_MW * r.hours:
+            reasons.append("A3 above nameplate")
+        elif r.actual_mwh < DERATE_RATIO * r.prior_model_mwh and q_lo <= r.q_mean_cfs <= q_hi:
+            reasons.append(f"A4 actual < {DERATE_RATIO:.0%} of prior model at normal flow")
+        else:
+            reasons.append("")
+    ay["exclude_reason"] = reasons
+    ay["excluded"] = ay["exclude_reason"] != ""
+    ay["period"] = "other"
+    for lo, hi, name in ((*V2_CALIBRATE, "calibrate"), (*V2_VALIDATE, "validate"), (*V2_AS_OPERATED, "as_operated")):
+        ay.loc[ay["year"].between(lo, hi), "period"] = name
+    ay["q_band_lo"], ay["q_band_hi"] = q_lo, q_hi
+    return ay
