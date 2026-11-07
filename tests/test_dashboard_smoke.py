@@ -34,6 +34,7 @@ def test_dashboard_renders(app):
     at, _, _ = app
     assert not at.exception, [e.value for e in at.exception]
     assert any("Generator Dispatch Simulator" in t.value for t in at.title)
+    assert any("Coverage Inspector" in s.value for s in at.subheader)
 
 
 def test_9a_windows_round_trip():

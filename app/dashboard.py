@@ -159,6 +159,41 @@ diag = pd.DataFrame([
 ])
 st.dataframe(diag, use_container_width=True)
 
+# ===== Coverage Inspector (ported from Historical_gensim) =====
+st.subheader("🔎 Coverage Inspector (min/max & missing price)")
+
+def _min_max(frame, col="timestamp"):
+    if frame.empty or col not in frame.columns:
+        return None, None
+    s = pd.to_datetime(frame[col], errors="coerce", utc=True)
+    return (s.min(), s.max()) if s.notna().any() else (None, None)
+
+try:
+    _mi = pd.read_csv(MERGED_INPUTS)
+except Exception:
+    _mi = pd.DataFrame()
+try:
+    _sr = pd.read_csv(RESULTS_PATH)
+except Exception:
+    _sr = pd.DataFrame()
+_min_mi, _max_mi = _min_max(_mi)
+_min_sr, _max_sr = _min_max(_sr)
+
+_cA, _cB = st.columns(2)
+with _cA:
+    st.write(f"**{MERGED_INPUTS.name}**")
+    st.write(f"Start: `{_min_mi}`  •  End: `{_max_mi}` (UTC)")
+    if not _mi.empty and "price_mwh" in _mi.columns:
+        _tmp = _mi.assign(month=pd.to_datetime(_mi["timestamp"], utc=True).dt.tz_convert(market_tz(CONFIG)).dt.strftime("%Y-%m"))
+        _miss = _tmp["price_mwh"].isna().groupby(_tmp["month"]).sum()
+        st.write("Missing `price_mwh` by month (rows):")
+        st.dataframe(_miss.to_frame("missing_price_rows"), use_container_width=True)
+with _cB:
+    st.write(f"**{RESULTS_PATH.name}**")
+    st.write(f"Start: `{_min_sr}`  •  End: `{_max_sr}` (UTC)")
+    if _min_mi is not None and _min_sr is not None and _min_sr > _min_mi:
+        st.warning("Simulation starts after merged inputs; check for downstream filtering in the simulation step.")
+
 # =============================
 # Generator Settings (editable)
 # =============================
