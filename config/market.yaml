@@ -1,0 +1,30 @@
+# PJM market assumptions. Values marked PLACEHOLDER are pending Adam's inputs.
+iso: PJM
+timezone: America/New_York
+
+capacity:
+  # Base Residual Auction clearing prices, RTO, $/MW-day, by delivery year (June 1 - May 31).
+  bra_prices:
+    "2026/27": 329.17
+    "2027/28": 333.44
+    "2028/29": 325.00
+    "2029/30": null            # auction Dec 2026 (still under the collar)
+  uncleared_collar_assumption: 325.00   # used for null years: assume = 2028/29 until 2029/30 clears
+  # Beyond the cleared years (price collar expires after 2029/30): scenario, $/MW-day, flat nominal.
+  post_collar_scenarios: {low: 100.0, mid: 200.0, high: 400.0}   # PLACEHOLDER: Adam sets final values
+  default_scenario: mid
+  # ELCC class ratings. Years not listed use the nearest listed year (logged as an assumption).
+  elcc:
+    hydro_intermittent: {"2028/29": 0.35, "2029/30": 0.34}
+    hydro_non_pumped_storage: {}   # fill in if a plant has meaningful pondage
+  # Expected non-performance penalty exposure, as a fraction of capacity revenue lost per year.
+  nonperformance_haircut: 0.05     # PLACEHOLDER
+
+energy:
+  # Until PJM Data Miner 2 day-ahead LMPs are cached (needs PJM_API_KEY), energy revenue uses a flat
+  # around-the-clock price. Run-of-river output is flat within a day, so realized ~= ATC average.
+  placeholder_atc_price_mwh: 45.0  # PLACEHOLDER: AEP-zone ATC level; replaced by hourly DA LMP x shape
+  escalation: 0.02                 # nominal $/MWh growth per year
+
+recs:
+  price_mwh: 0.0                   # Virginia REC value; default 0 per brief

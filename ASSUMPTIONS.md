@@ -40,6 +40,30 @@ Running log of assumptions, judgment calls and unverified facts. Each entry: wha
   DUK revenue only via explicit avoided cost; any other series via a user CSV (`GENSIM_PRICE_FILE`).
   Series with median > $1,000/MWh are rejected as "looks like MW", never rescaled.
 
+## Capacity and valuation (2026-11-07)
+
+- **BRA prices** as given (2026/27 329.17, 2027/28 333.44, 2028/29 325.00). **2029/30 is not cleared**
+  (auction Dec 2026). Until it is, it is assumed equal to 2028/29 ($325, still under the collar)
+  via `uncleared_collar_assumption`. After 2029/30: low/mid/high = 100/200/400 (placeholders).
+- **ELCC Hydro Intermittent:** 35% (2028/29), 34% (2029/30). **Other years use the nearest listed
+  year** (2026/27–2027/28 → 35%; 2030/31+ → 34%). Accredited MW = installed × rating; installed =
+  5.0 MW net summer (restored) or 2.5 MW (as-operated regime cap).
+- Delivery years (Jun–May) are blended into calendar years by days; out-of-service days earn no
+  capacity revenue. Non-performance exposure is a 5% annual haircut (placeholder).
+- **Energy is a placeholder** flat $45/MWh ATC, 2%/yr, until PJM DA LMPs are cached (needs
+  PJM_API_KEY). It is the largest tornado driver, so treat all max-price numbers as provisional.
+- DCF: annual calendar-year cash flows, end-of-year discounting from 2027-01-01, 20 years, pre-tax
+  (tax_rate 0), **no terminal value** (license term unconfirmed). Generation in a year = scenario
+  MWh × fraction of the year in service, spread evenly through the year (no seasonality).
+- **Hydrology cases are 1-year exceedance levels held for all 20 years** (as the brief asks). That
+  makes P90 a harsh downside: over 20 independent years the average sits near P50.
+- **Regimes:** as-operated until the restoration return-to-service date, then restored output
+  ("restored" case only), with restoration capex in its spend year. Helene repair: owner-borne
+  share = total × (1 − insured fraction). Before Helene return to service: no output and no capacity
+  revenue, but fixed costs continue.
+- All cost and capex inputs in `config/assets/fries.yaml` marked PLACEHOLDER are illustrative,
+  not researched values.
+
 ## Timestamps (defect #4)
 
 - Internal convention: tz-aware UTC; every file the pipeline writes carries `+00:00`. Naive

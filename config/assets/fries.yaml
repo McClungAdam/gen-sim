@@ -31,3 +31,48 @@ cost_priors_ferc_ea_2020usd:         # Aquenergy figures in the EA (Table 6), 20
   relicensing_cost_usd: 348840
   net_investment_usd: 904200
   dependable_capacity_mw: 2.34
+
+# ---------------------------------------------------------------- valuation inputs
+# All $ nominal. PLACEHOLDER = to be set by Adam; sources noted where known.
+valuation:
+  valuation_date: "2027-01-01"
+  horizon_years: 20
+  discount_rates: [0.08, 0.10, 0.12]
+  tax_rate: 0.0                      # 0 = pre-tax unlevered DCF (PLACEHOLDER: set to model taxes)
+  regimes:                           # generation scenarios from docs/calibration_params.json
+    as_operated: {params_key: as_operated_regime, accredited_installed_mw: 2.5}
+    restored:    {params_key: restored_v2,        accredited_installed_mw: 5.0}
+  base_case: {regime: as_operated, hydrology: P50, capacity: mid, discount_rate: 0.10}
+
+contract:                            # inherited-PPA toggle (base case: merchant PJM)
+  enabled: false
+  fixed_price_mwh: 50.0              # PLACEHOLDER
+  capacity_sold_under_contract: true # if true, PJM capacity revenue goes to the offtaker, not us
+  end_year: 2030                     # merchant after this year
+
+costs:
+  fixed_om_per_kw_yr: 60.0           # NREL ATB conventional hydro ~$28-154/kW-yr; brief default ~$60.
+                                     # FERC EA (2020$) applicant O&M was $484,010/yr (~$95/kW-yr on 5.1 MW).
+  om_basis_kw: 5400                  # nameplate kW used for $/kW-yr
+  insurance_per_yr: 50000            # PLACEHOLDER
+  property_tax_per_yr: 15000         # PLACEHOLDER
+  ferc_annual_charges_per_yr: 10000  # PLACEHOLDER (FERC hydropower annual charges)
+  market_participant_fees_per_yr: 25000   # PLACEHOLDER (PJM fees + market participant / QSE agent)
+  scada_monitoring_per_yr: 12000     # PLACEHOLDER
+  escalation: 0.025
+
+capex:
+  helene_repair:                     # power canal wall rehabilitation; construction authorized 2026-02-11
+    total_usd: 3000000               # PLACEHOLDER
+    insured_fraction: 0.5            # PLACEHOLDER (owner-borne = 1 - insured)
+    spend_year: 2027
+    return_to_service: "2027-07-01"  # PLACEHOLDER
+  restoration:                       # return unit 4 to service ("restored" regime only)
+    total_usd: 1500000               # PLACEHOLDER
+    spend_year: 2027
+    return_to_service: "2028-01-01"  # PLACEHOLDER; as-operated output until then
+  relicensing_dam_safety_reserve:    # spillway capacity assessment open (FERC 2026-11-04), Part 12D
+    - {name: spillway capacity remediation, usd: 1000000, year: 2029}   # PLACEHOLDER
+    - {name: recreation facilities (license, by 2028-12-31), usd: 150000, year: 2028}   # PLACEHOLDER
+  major_overhauls:                   # optional
+    - {name: unit 1 rewind, usd: 400000, year: 2032}   # PLACEHOLDER
